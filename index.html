@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Liqstorm · Bull or Bear?</title>
+<meta name="description" content="Liqstorm turns live market data into a 3D battle. Every trade is an attack, the order book becomes fortress walls, and your own position fights on the field.">
+<meta property="og:title" content="Liqstorm · Bull or Bear?">
+<meta property="og:description" content="Watch the market fight. Live.">
+<meta property="og:image" content="assets/btc-arena.png">
+<link rel="icon" href="favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#05080e;
+    --bg-2:#0a101a;
+    --panel:rgba(14,22,34,.72);
+    --line:rgba(120,160,210,.14);
+    --text:#e6edf6;
+    --muted:#8a9ab0;
+    --bull:#38bdf8;
+    --bear:#f43f5e;
+    --gold:#ffc94d;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font:16px/1.6 Inter,"Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  }
+  a{color:inherit;}
+  h1,h2,h3,.brand,.eyebrow{font-family:Rajdhani,Inter,sans-serif;letter-spacing:.04em;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px;}
+
+  /* background: split glow bull vs bear + sparks */
+  #sparks{position:fixed;inset:0;z-index:0;pointer-events:none;}
+  .glow{position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(60vw 60vh at 12% 18%, rgba(56,189,248,.13), transparent 60%),
+      radial-gradient(60vw 60vh at 88% 22%, rgba(244,63,94,.12), transparent 60%),
+      radial-gradient(80vw 50vh at 50% 110%, rgba(255,201,77,.06), transparent 70%);}
+  main,header,footer{position:relative;z-index:1;}
+
+  /* nav */
+  header{padding:18px 0;}
+  header .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:22px;text-decoration:none;}
+  .brand img{width:34px;height:34px;}
+  .pill{font-family:Rajdhani,sans-serif;font-weight:600;font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--gold);border:1px solid rgba(255,201,77,.35);border-radius:999px;padding:5px 12px;white-space:nowrap;}
+
+  /* hero */
+  .hero{padding-top:56px;padding-bottom:30px;text-align:center;}
+  .hero img.logo{width:112px;height:112px;filter:drop-shadow(0 0 28px rgba(255,201,77,.25));}
+  .hero h1{font-size:clamp(52px,11vw,112px);line-height:.95;margin:18px 0 6px;font-weight:700;
+    background:linear-gradient(90deg,var(--bull) 0%,#e6edf6 48%,#e6edf6 52%,var(--bear) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  .hero .slogan{font-family:Rajdhani,sans-serif;font-size:clamp(20px,3.4vw,30px);font-weight:600;color:var(--gold);letter-spacing:.3em;text-transform:uppercase;}
+  .hero p.lead{max-width:640px;margin:22px auto 0;color:#c2cedd;font-size:18px;}
+  .versus{display:flex;justify-content:center;gap:10px;margin-top:28px;flex-wrap:wrap;}
+  .versus span{font-family:Rajdhani,sans-serif;font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;
+    padding:9px 18px;border-radius:10px;border:1px solid;}
+  .versus .b{color:var(--bull);border-color:rgba(56,189,248,.4);background:rgba(56,189,248,.07);}
+  .versus .s{color:var(--bear);border-color:rgba(244,63,94,.4);background:rgba(244,63,94,.07);}
+  .versus .vs{color:var(--muted);border:0;padding:9px 2px;}
+
+  /* screenshot */
+  .shot{margin:46px auto 0;max-width:1000px;border-radius:var(--radius);overflow:hidden;position:relative;
+    border:1px solid var(--line);box-shadow:0 30px 90px rgba(0,0,0,.6),0 0 0 1px rgba(255,201,77,.05),0 0 80px rgba(255,160,40,.10);}
+  .shot img{display:block;width:100%;height:auto;}
+  .shot-cap{margin:12px auto 0;font-size:13px;color:var(--muted);}
+
+  /* sections */
+  section{padding:80px 0 10px;}
+  .eyebrow{color:var(--gold);font-weight:600;font-size:14px;letter-spacing:.24em;text-transform:uppercase;margin:0 0 8px;}
+  h2{font-size:clamp(30px,5vw,44px);line-height:1.1;margin:0 0 14px;font-weight:700;}
+  .sub{color:var(--muted);max-width:640px;margin:0 0 34px;}
+
+  .grid{display:grid;gap:16px;grid-template-columns:repeat(3,1fr);}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px;backdrop-filter:blur(8px);}
+  .card .ic{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;margin-bottom:14px;font-size:20px;
+    background:rgba(255,201,77,.08);border:1px solid rgba(255,201,77,.25);}
+  .card h3{margin:0 0 6px;font-size:22px;font-weight:700;}
+  .card p{margin:0;color:#aebbcc;font-size:15px;}
+
+  /* escalation */
+  .ladder{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:6px;}
+  .step{border-radius:10px;padding:14px 10px;text-align:center;border:1px solid var(--line);background:var(--panel);}
+  .step b{display:block;font-family:Rajdhani,sans-serif;font-size:17px;letter-spacing:.04em;}
+  .step small{color:var(--muted);font-size:12px;}
+  .step:nth-child(1){border-color:rgba(255,201,77,.15)}
+  .step:nth-child(6){border-color:rgba(255,201,77,.55);box-shadow:0 0 30px rgba(255,201,77,.12) inset;}
+
+  /* worlds */
+  .worlds{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+  .world{position:relative;border-radius:var(--radius);padding:22px;min-height:260px;overflow:hidden;border:1px solid var(--line);
+    display:flex;flex-direction:column;justify-content:flex-end;}
+  .world::before{content:"";position:absolute;inset:0;z-index:0;}
+  .world > *{position:relative;z-index:1;}
+  .world .tk{font-family:Rajdhani,sans-serif;font-weight:700;font-size:13px;letter-spacing:.2em;opacity:.85;}
+  .world h3{margin:2px 0 6px;font-size:24px;}
+  .world p{margin:0;font-size:14px;color:#c9d3e0;}
+  .world.btc::before{background:radial-gradient(120% 80% at 50% 0%,rgba(255,150,30,.45),transparent 60%),linear-gradient(180deg,#1a0e05,#0b0704);}
+  .world.btc .tk{color:#ffa21a;}
+  .world.xrp::before{background:radial-gradient(120% 80% at 50% 0%,rgba(56,189,248,.40),transparent 60%),linear-gradient(180deg,#06131f,#04090f);}
+  .world.xrp .tk{color:#7dd3fc;}
+  .world.sol::before{background:radial-gradient(90% 60% at 30% 10%,rgba(20,241,149,.30),transparent 60%),radial-gradient(90% 60% at 80% 20%,rgba(153,69,255,.45),transparent 60%),linear-gradient(180deg,#110a1f,#07050d);}
+  .world.sol .tk{color:#14f195;}
+  .world.eth::before{background:repeating-linear-gradient(135deg,rgba(140,140,255,.05) 0 10px,transparent 10px 20px),linear-gradient(180deg,#0d0d1a,#07070d);}
+  .world.eth .tk{color:#a5a8ff;}
+  .world.eth{opacity:.75;}
+  .soon{position:absolute;top:14px;right:14px;z-index:2;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 9px;}
+
+  /* you on the field */
+  .you{display:grid;grid-template-columns:1.1fr 1fr;gap:30px;align-items:center;}
+  .list{margin:0;padding:0;list-style:none;}
+  .list li{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);color:#c2cedd;}
+  .list li:last-child{border-bottom:0;}
+  .list li span{color:var(--gold);font-weight:700;font-family:Rajdhani,sans-serif;min-width:22px;}
+  .star{aspect-ratio:1/1;max-width:340px;margin:0 auto;border-radius:50%;position:relative;
+    background:radial-gradient(circle at 50% 50%,rgba(255,201,77,.35),rgba(255,201,77,.05) 45%,transparent 70%);}
+  .star::after{content:"★";position:absolute;inset:0;display:grid;place-items:center;font-size:120px;color:var(--gold);
+    text-shadow:0 0 30px rgba(255,201,77,.8),0 0 70px rgba(255,160,40,.5);animation:pulse 2.4s ease-in-out infinite;}
+  @keyframes pulse{50%{transform:scale(1.08);opacity:.85}}
+
+  /* cta */
+  .cta{margin:90px 0 40px;text-align:center;padding:48px 22px;border-radius:20px;border:1px solid rgba(255,201,77,.25);
+    background:linear-gradient(180deg,rgba(255,201,77,.07),rgba(255,201,77,.01));}
+  .cta h2{margin-bottom:8px;}
+  .cta p{color:#b7c3d3;margin:0 auto;max-width:560px;}
+
+  .cta .mail{display:inline-block;margin-top:22px;font-family:Rajdhani,sans-serif;font-weight:600;font-size:18px;letter-spacing:.06em;
+    color:var(--gold);text-decoration:none;border:1px solid rgba(255,201,77,.4);border-radius:10px;padding:10px 20px;transition:background .2s;}
+  .cta .mail:hover{background:rgba(255,201,77,.1);}
+  footer{border-top:1px solid var(--line);padding:28px 0 40px;color:var(--muted);font-size:13px;}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;}
+  footer p{margin:0;max-width:720px;}
+
+  @media (max-width:900px){
+    .grid{grid-template-columns:1fr;}
+    .worlds{grid-template-columns:1fr 1fr;}
+    .ladder{grid-template-columns:repeat(3,1fr);}
+    .you{grid-template-columns:1fr;}
+    .star{max-width:220px;width:100%;margin-top:10px;}
+  }
+  @media (max-width:520px){
+    .worlds{grid-template-columns:1fr;}
+    .world{min-height:190px;}
+    .ladder{grid-template-columns:repeat(2,1fr);}
+    header .pill{display:none;}
+    .hero{padding-top:30px;}
+    .star{display:none;}
+  }
+  @media (prefers-reduced-motion:reduce){ .star::after{animation:none;} #sparks{display:none;} }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<canvas id="sparks"></canvas>
+
+<header>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="assets/logo.png" alt="">LIQSTORM</a>
+    <span class="pill">Coming soon</span>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <img class="logo" src="assets/logo.png" alt="Liqstorm logo">
+    <h1>LIQSTORM</h1>
+    <div class="slogan">Bull or Bear?</div>
+    <p class="lead">The market is a battlefield. Liqstorm lets you see it. Every trade on your exchange becomes a live attack, big orders rise as fortress walls, and liquidations shatter whole units.</p>
+    <div class="versus"><span class="b">Bulls</span><span class="vs">vs</span><span class="s">Bears</span></div>
+
+    <div class="shot">
+      <img src="assets/btc-arena.png" alt="Liqstorm Bitcoin arena with live Bitunix futures data" width="1000" height="560">
+    </div>
+    <div class="shot-cap">Live prototype · BTC world "Father of Coins" · Bitunix futures data</div>
+  </div>
+
+  <section>
+    <div class="wrap">
+      <div class="eyebrow">How it works</div>
+      <h2>Order flow you can feel.</h2>
+      <p class="sub">What usually hides in tape readers and expensive heatmap tools plays out in front of you as a battle, readable at a glance.</p>
+      <div class="grid">
+        <div class="card"><div class="ic">⚔</div><h3>Every trade attacks</h3><p>Each executed buy or sell on the exchange fires in real time. The bigger the trade, the heavier the weapon.</p></div>
+        <div class="card"><div class="ic">🧱</div><h3>Order book walls</h3><p>Large limit orders stand as fortress walls. Pulled orders sink away, walls broken by price collapse on the field.</p></div>
+        <div class="card"><div class="ic">💥</div><h3>Liquidation storms</h3><p>Forced liquidations hit hard. Units shatter, the front moves, the killfeed tells you who just got wiped out.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="eyebrow">Escalation</div>
+      <h2>Six levels of firepower.</h2>
+      <p class="sub">Trade size decides the weapon. From single shots to a full-scale offensive when whales move.</p>
+      <div class="ladder">
+        <div class="step"><b>Rifle</b><small>small trades</small></div>
+        <div class="step"><b>Machine gun</b><small>growing size</small></div>
+        <div class="step"><b>Mortar</b><small>serious size</small></div>
+        <div class="step"><b>Tank</b><small>heavy trades</small></div>
+        <div class="step"><b>Air strike</b><small>big players</small></div>
+        <div class="step"><b>Offensive</b><small>whale alert</small></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="eyebrow">Worlds</div>
+      <h2>Every coin gets its own world.</h2>
+      <p class="sub">Each battlefield is built from the real story and technology of its coin. You recognise your coin at first sight.</p>
+      <div class="worlds">
+        <div class="world btc"><div class="tk">BTC</div><h3>Father of Coins</h3><p>An ancient stone arena with glowing runes. Assassins hold the long side, crusaders the short side.</p></div>
+        <div class="world xrp"><div class="tk">XRP</div><h3>Crystal Front</h3><p>A cold world of crystal and holograms. Crystal bulls against crystal bears on a circuit board.</p></div>
+        <div class="world sol"><div class="tk">SOL</div><h3>Solar Grid</h3><p>A neon platform that beats with the live pulse of the real network. Solar riders against eclipse ninjas.</p></div>
+        <div class="world eth"><span class="soon">In the forge</span><div class="tk">ETH</div><h3>Next world</h3><p>Being designed. Any other coin fights on a universal battlefield.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap you">
+      <div>
+        <div class="eyebrow">Your battle</div>
+        <h2>Your exchange. Your position. Your army.</h2>
+        <p class="sub" style="margin-bottom:14px">Liqstorm runs on your own device and connects to the exchange you actually trade on.</p>
+        <ul class="list">
+          <li><span>01</span>Market data from your own exchange, not someone else's.</li>
+          <li><span>02</span>Your fills appear as a golden star above your troops.</li>
+          <li><span>03</span>Entry and liquidation price live on the chart.</li>
+          <li><span>04</span>Read-only API keys stay encrypted on your device.</li>
+        </ul>
+      </div>
+      <div class="star" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <div class="cta">
+      <div class="eyebrow">Status</div>
+      <h2>The storm is coming.</h2>
+      <p>Liqstorm is in active development. First release for desktop, mobile to follow.</p>
+      <a class="mail" href="mailto:contact@liqstorm.com">contact@liqstorm.com</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Liqstorm is a visualisation tool. It does not place trades, give signals or provide financial advice.</p>
+    <p>© 2026 Liqstorm · <a href="mailto:contact@liqstorm.com">contact@liqstorm.com</a></p>
+  </div>
+</footer>
+
+<script>
+/* drifting embers in bull / bear colours */
+(function(){
+  const c=document.getElementById('sparks'); if(!c) return;
+  const x=c.getContext('2d'); let w,h,dpr,parts=[];
+  function size(){dpr=Math.min(window.devicePixelRatio||1,2);w=c.width=innerWidth*dpr;h=c.height=innerHeight*dpr;c.style.width=innerWidth+'px';c.style.height=innerHeight+'px';}
+  function spawn(init){const side=Math.random()<.5;return{
+    x:(side?Math.random()*.5:.5+Math.random()*.5)*w, y:init?Math.random()*h:h+10,
+    r:(Math.random()*1.6+.4)*dpr, v:(Math.random()*.35+.12)*dpr, a:Math.random()*.6+.2,
+    col:side?'56,189,248':'244,63,94', drift:(Math.random()-.5)*.25*dpr};}
+  function init(){parts=[];const n=Math.round(Math.min(90,innerWidth/14));for(let i=0;i<n;i++)parts.push(spawn(true));}
+  function tick(){x.clearRect(0,0,w,h);for(const p of parts){p.y-=p.v;p.x+=p.drift;if(p.y<-10)Object.assign(p,spawn(false));
+    x.beginPath();x.arc(p.x,p.y,p.r,0,Math.PI*2);x.fillStyle=`rgba(${p.col},${p.a})`;x.shadowBlur=8*dpr;x.shadowColor=`rgba(${p.col},.8)`;x.fill();}
+    requestAnimationFrame(tick);}
+  size();init();tick();addEventListener('resize',()=>{size();init();});
+})();
+</script>
+</body>
+</html>
