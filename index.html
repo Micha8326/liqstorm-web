@@ -7,7 +7,7 @@
 <meta name="description" content="Liqstorm turns live market data into a 3D battle. Every trade is an attack, the order book becomes fortress walls, and your own position fights on the field.">
 <meta property="og:title" content="Liqstorm · Bull or Bear?">
 <meta property="og:description" content="Watch the market fight. Live.">
-<meta property="og:image" content="assets/btc-arena.png">
+<meta property="og:image" content="assets/clip-btc.jpg">
 <link rel="icon" href="favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -71,7 +71,7 @@
   /* screenshot */
   .shot{margin:46px auto 0;max-width:1000px;border-radius:var(--radius);overflow:hidden;position:relative;
     border:1px solid var(--line);box-shadow:0 30px 90px rgba(0,0,0,.6),0 0 0 1px rgba(255,201,77,.05),0 0 80px rgba(255,160,40,.10);}
-  .shot img{display:block;width:100%;height:auto;}
+  .shot video{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#000;}
   .shot-cap{margin:12px auto 0;font-size:13px;color:var(--muted);}
 
   /* sections */
@@ -104,6 +104,7 @@
   .world .tk{font-family:Rajdhani,sans-serif;font-weight:700;font-size:13px;letter-spacing:.2em;opacity:.85;}
   .world h3{margin:2px 0 6px;font-size:24px;}
   .world p{margin:0;font-size:14px;color:#c9d3e0;}
+  @media (min-width:521px){ .world p{min-height:6.4em;} }
   .world.btc::before{background:radial-gradient(120% 80% at 50% 0%,rgba(255,150,30,.45),transparent 60%),linear-gradient(180deg,#1a0e05,#0b0704);}
   .world.btc .tk{color:#ffa21a;}
   .world.xrp::before{background:radial-gradient(120% 80% at 50% 0%,rgba(56,189,248,.40),transparent 60%),linear-gradient(180deg,#06131f,#04090f);}
@@ -113,6 +114,28 @@
   .world.eth::before{background:repeating-linear-gradient(135deg,rgba(140,140,255,.05) 0 10px,transparent 10px 20px),linear-gradient(180deg,#0d0d1a,#07070d);}
   .world.eth .tk{color:#a5a8ff;}
   .world.eth{opacity:.75;}
+  button.world{font:inherit;color:inherit;text-align:left;cursor:pointer;width:100%;transition:transform .2s,border-color .2s;}
+  button.world::after{content:"";position:absolute;inset:0;z-index:0;background:var(--poster) center/cover no-repeat;opacity:.55;transition:opacity .25s;}
+  button.world::before{z-index:0;}
+  button.world > *{z-index:2;}
+  button.world .shade{position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(5,8,14,.05) 20%,rgba(5,8,14,.92) 78%);}
+  button.world:hover,button.world:focus-visible{transform:translateY(-3px);border-color:rgba(255,201,77,.45);outline:none;}
+  button.world:hover::after,button.world:focus-visible::after{opacity:.85;}
+  .play{position:absolute;top:14px;right:14px;z-index:2;display:flex;align-items:center;gap:6px;font-family:Rajdhani,sans-serif;font-weight:600;
+    font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#fff;background:rgba(5,8,14,.6);border:1px solid rgba(255,255,255,.25);
+    border-radius:999px;padding:4px 11px 4px 8px;backdrop-filter:blur(4px);}
+  .play svg{width:14px;height:14px;fill:currentColor;}
+
+  /* clip modal */
+  .modal{position:fixed;inset:0;z-index:50;display:none;place-items:center;padding:16px;background:rgba(2,4,8,.86);backdrop-filter:blur(6px);}
+  .modal.open{display:grid;}
+  .modal-box{width:min(1100px,100%);position:relative;}
+  .modal video{display:block;width:100%;aspect-ratio:16/9;background:#000;border-radius:var(--radius);border:1px solid var(--line);box-shadow:0 30px 90px rgba(0,0,0,.7);}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:12px;}
+  .modal-head h3{margin:0;font-size:24px;}
+  .modal-close{font:600 14px Rajdhani,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--text);background:transparent;
+    border:1px solid var(--line);border-radius:10px;padding:7px 14px;cursor:pointer;}
+  .modal-close:hover{border-color:rgba(255,201,77,.5);color:var(--gold);}
   .soon{position:absolute;top:14px;right:14px;z-index:2;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
     color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 9px;}
 
@@ -179,9 +202,11 @@
     <div class="versus"><span class="b">Bulls</span><span class="vs">vs</span><span class="s">Bears</span></div>
 
     <div class="shot">
-      <img src="assets/btc-arena.png" alt="Liqstorm Bitcoin arena with live Bitunix futures data" width="1000" height="560">
+      <video autoplay muted loop playsinline preload="auto" poster="assets/clip-btc.jpg" aria-label="Liqstorm Bitcoin arena with live market data">
+        <source src="assets/clip-btc.mp4" type="video/mp4">
+      </video>
     </div>
-    <div class="shot-cap">Live prototype · BTC world "Father of Coins" · Bitunix futures data</div>
+    <div class="shot-cap">Recorded live · BTC world "Father of Coins" · real Bitunix futures data</div>
   </div>
 
   <section>
@@ -217,11 +242,11 @@
     <div class="wrap">
       <div class="eyebrow">Worlds</div>
       <h2>Every coin gets its own world.</h2>
-      <p class="sub">Each battlefield is built from the real story and technology of its coin. You recognise your coin at first sight.</p>
+      <p class="sub">Each battlefield is built from the real story and technology of its coin. You recognise your coin at first sight. Tap a world to watch 10 seconds of live battle.</p>
       <div class="worlds">
-        <div class="world btc"><div class="tk">BTC</div><h3>Father of Coins</h3><p>An ancient stone arena with glowing runes. Assassins hold the long side, crusaders the short side.</p></div>
-        <div class="world xrp"><div class="tk">XRP</div><h3>Crystal Front</h3><p>A cold world of crystal and holograms. Crystal bulls against crystal bears on a circuit board.</p></div>
-        <div class="world sol"><div class="tk">SOL</div><h3>Solar Grid</h3><p>A neon platform that beats with the live pulse of the real network. Solar riders against eclipse ninjas.</p></div>
+        <button class="world btc" data-clip="btc" data-title="BTC · Father of Coins" style="--poster:url(assets/clip-btc.jpg)"><span class="shade"></span><span class="play"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>10 s</span><div class="tk">BTC</div><h3>Father of Coins</h3><p>An ancient stone arena with glowing runes. Assassins hold the long side, crusaders the short side.</p></button>
+        <button class="world xrp" data-clip="xrp" data-title="XRP · Crystal Front" style="--poster:url(assets/clip-xrp.jpg)"><span class="shade"></span><span class="play"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>10 s</span><div class="tk">XRP</div><h3>Crystal Front</h3><p>A cold world of crystal and holograms. Crystal bulls against crystal bears on a circuit board.</p></button>
+        <button class="world sol" data-clip="sol" data-title="SOL · Solar Grid" style="--poster:url(assets/clip-sol.jpg)"><span class="shade"></span><span class="play"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>10 s</span><div class="tk">SOL</div><h3>Solar Grid</h3><p>A neon platform that beats with the live pulse of the real network. Solar riders against eclipse ninjas.</p></button>
         <div class="world eth"><span class="soon">In the forge</span><div class="tk">ETH</div><h3>Next world</h3><p>Being designed. Any other coin fights on a universal battlefield.</p></div>
       </div>
     </div>
@@ -254,6 +279,13 @@
   </div>
 </main>
 
+<div class="modal" id="clipModal" role="dialog" aria-modal="true" aria-labelledby="clipTitle">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="clipTitle"></h3><button class="modal-close" type="button">Close ✕</button></div>
+    <video id="clipVideo" controls playsinline muted preload="none"></video>
+  </div>
+</div>
+
 <footer>
   <div class="wrap">
     <p>Liqstorm is a visualisation tool. It does not place trades, give signals or provide financial advice.</p>
@@ -262,6 +294,22 @@
 </footer>
 
 <script>
+/* world clips */
+(function(){
+  const m=document.getElementById('clipModal'), v=document.getElementById('clipVideo'), t=document.getElementById('clipTitle');
+  let last=null;
+  function close(){ m.classList.remove('open'); v.pause(); v.removeAttribute('src'); v.load(); if(last) last.focus(); }
+  document.querySelectorAll('button.world[data-clip]').forEach(b=>b.addEventListener('click',()=>{
+    last=b; const c=b.dataset.clip;
+    t.textContent=b.dataset.title; v.poster='assets/clip-'+c+'.jpg'; v.src='assets/clip-'+c+'.mp4';
+    m.classList.add('open'); v.play().catch(()=>{}); m.querySelector('.modal-close').focus();
+  }));
+  m.querySelector('.modal-close').addEventListener('click',close);
+  m.addEventListener('click',e=>{ if(e.target===m) close(); });
+  v.addEventListener('ended',()=>{});
+  addEventListener('keydown',e=>{ if(e.key==='Escape' && m.classList.contains('open')) close(); });
+})();
+
 /* drifting embers in bull / bear colours */
 (function(){
   const c=document.getElementById('sparks'); if(!c) return;
