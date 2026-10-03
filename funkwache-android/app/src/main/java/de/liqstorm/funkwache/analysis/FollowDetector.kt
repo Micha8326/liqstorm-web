@@ -1,0 +1,139 @@
+package de.liqstorm.funkwache.analysis
+
+import de.liqstorm.funkwache.model.Severity
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
+
+/**
+ * Detects radio devices that keep showing up around you while you move – the core signal for a
+ * hidden tracker (AirTag, SmartTag, Tile ...) or a device carried by someone following you.
+ *
+ * Pure logic, no Android dependencies.
+ */
+class FollowDetector {
+
+    data class Pt(val t: Long, val lat: Double?, val lon: Double?)
+
+    class Track(val id: String, var label: String, var tracker: Boolean) {
+        val pts = ArrayList<Pt>()
+        var alerted: Severity? = null
+    }
+
+    data class Finding(val id: String, val label: String, val severity: Severity, val title: String, val detail: String)
+
+    data class Progress(val spanMs: Long, val sightings: Int, val maxDistM: Double)
+
+    private val tracks = HashMap<String, Track>()
+
+    /** Minimum time between two recorded sightings of the same device. */
+    var minGapTrackerMs = 30_000L
+    var minGapOtherMs = 60_000L
+
+    @Synchronized
+    fun sighting(id: String, label: String, tracker: Boolean, now: Long, lat: Double?, lon: Double?) {
+        val tr = tracks.getOrPut(id) { Track(id, label, tracker) }
+        tr.label = label
+        tr.tracker = tr.tracker || tracker
+        val last = tr.pts.lastOrNull()
+        val gap = if (tr.tracker) minGapTrackerMs else minGapOtherMs
+        if (last != null && now - last.t < gap) return
+        tr.pts += Pt(now, lat, lon)
+        if (tr.pts.size > 400) tr.pts.removeAt(0)
+    }
+
+    @Synchronized
+    fun progress(id: String): Progress? {
+        val tr = tracks[id] ?: return null
+        if (tr.pts.isEmpty()) return null
+        return Progress(tr.pts.last().t - tr.pts.first().t, tr.pts.size, maxDistance(tr.pts))
+    }
+
+    @Synchronized
+    fun evaluate(now: Long): List<Finding> {
+        val out = ArrayList<Finding>()
+        val it = tracks.values.iterator()
+        while (it.hasNext()) {
+            val tr = it.next()
+            val last = tr.pts.last()
+            // prune: gone for 3 h, or a one-off sighting older than 15 min
+            if (now - last.t > 3 * 3600_000L || (tr.pts.size == 1 && now - last.t > 15 * 60_000L)) {
+                it.remove()
+                continue
+            }
+            val span = last.t - tr.pts.first().t
+            val located = tr.pts.count { p -> p.lat != null }
+            val dist = maxDistance(tr.pts)
+            val f: Finding? = if (tr.tracker) {
+                when {
+                    span >= 10 * 60_000L && tr.pts.size >= 3 && dist >= 300 -> Finding(
+                        tr.id, tr.label, Severity.HIGH, "Tracker folgt dir",
+                        "${tr.label} (${tr.id}) ist seit ${span / 60000} min in deiner Nähe und hat sich " +
+                            "${dist.toInt()} m mit dir bewegt. Suche ihn mit der Funk-Suche (Bluetooth › Gerät › Orten)."
+                    )
+                    located < 2 && span >= 30 * 60_000L && buckets(tr.pts) >= 6 -> Finding(
+                        tr.id, tr.label, Severity.MEDIUM, "Tracker dauerhaft in deiner Nähe",
+                        "${tr.label} (${tr.id}) ist seit ${span / 60000} min ununterbrochen in Funkreichweite. " +
+                            "Ohne Standortdaten lässt sich nicht sagen, ob er dir folgt."
+                    )
+                    else -> null
+                }
+            } else {
+                if (span >= 20 * 60_000L && tr.pts.size >= 5 && dist >= 1000) Finding(
+                    tr.id, tr.label, Severity.LOW, "Gerät begleitet dich",
+                    "${tr.label} (${tr.id}) war über ${dist.toInt()} m und ${span / 60000} min mit dir unterwegs. " +
+                        "Wenn es dein eigenes Gerät ist, markiere es als vertraut."
+                ) else null
+            }
+            if (f != null && (tr.alerted == null || f.severity.ordinal > tr.alerted!!.ordinal)) {
+                tr.alerted = f.severity
+                out += f
+            }
+        }
+        return out
+    }
+
+    @Synchronized
+    fun clear() = tracks.clear()
+
+    private fun buckets(pts: List<Pt>) = pts.map { it.t / (5 * 60_000L) }.toSet().size
+
+    companion object {
+        fun maxDistance(pts: List<Pt>): Double {
+            val loc = pts.filter { it.lat != null && it.lon != null }
+            if (loc.size < 2) return 0.0
+            // Distance from first and last position covers out-and-back movement well enough.
+            val a = loc.first()
+            val b = loc.last()
+            return loc.maxOf { maxOf(haversine(a.lat!!, a.lon!!, it.lat!!, it.lon!!), haversine(b.lat!!, b.lon!!, it.lat!!, it.lon!!)) }
+        }
+
+        fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+            val r = 6_371_000.0
+            val dLat = Math.toRadians(lat2 - lat1)
+            val dLon = Math.toRadians(lon2 - lon1)
+            val h = sin(dLat / 2).pow(2) + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
+            return 2 * r * asin(sqrt(h))
+        }
+    }
+}
+
+/**
+ * BLE spam (Flipper Zero "BLE Spam", ESP32 apps) floods the air with pairing pop-up frames
+ * from constantly changing random addresses. Legit environments rarely show more than a
+ * handful of distinct pop-up advertisers in a few seconds.
+ */
+class SpamDetector(private val windowMs: Long = 10_000, private val threshold: Int = 18) {
+    private val events = ArrayDeque<Pair<Long, String>>()
+
+    /** Returns the number of distinct pop-up advertisers in the window if it crosses the threshold. */
+    @Synchronized
+    fun record(address: String, now: Long): Int? {
+        events.addLast(now to address)
+        while (events.isNotEmpty() && events.first().first < now - windowMs) events.removeFirst()
+        val distinct = events.mapTo(HashSet()) { it.second }.size
+        return if (distinct >= threshold) distinct else null
+    }
+}
