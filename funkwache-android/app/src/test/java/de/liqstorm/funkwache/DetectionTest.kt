@@ -95,18 +95,41 @@ class FollowDetectorTest {
     private val min = 60_000L
 
     @Test
-    fun trackerMovingWithUserRaisesHigh() {
+    fun trackerOnlyTravellingAlongIsLow() {
+        // e.g. another passenger's AirTag on the same train
         val d = FollowDetector()
         var lat = 52.5200
         for (i in 0..12) {
             d.sighting("T1", "AirTag", true, i * min, lat, 13.405)
             lat += 0.0005 // ~55 m per minute
         }
-        val f = d.evaluate(12 * min)
-        assertEquals(1, f.size)
-        assertEquals(Severity.HIGH, f[0].severity)
-        // not raised twice
+        assertEquals(Severity.LOW, d.evaluate(12 * min).single().severity)
         assertTrue(d.evaluate(13 * min).isEmpty())
+    }
+
+    @Test
+    fun trackerStillThereAfterArrivalIsHigh() {
+        val d = FollowDetector()
+        var lat = 52.5200
+        for (i in 0..12) {
+            d.sighting("T1", "AirTag", true, i * min, lat, 13.405)
+            lat += 0.0005
+        }
+        d.evaluate(12 * min)
+        for (i in 13..22) d.sighting("T1", "AirTag", true, i * min, lat, 13.405) // stopped, tracker stays
+        assertEquals(Severity.HIGH, d.evaluate(22 * min).single().severity)
+    }
+
+    @Test
+    fun passengerLeavesAtStationNoHigh() {
+        val d = FollowDetector()
+        var lat = 52.5200
+        for (i in 0..12) {
+            d.sighting("T1", "AirTag", true, i * min, lat, 13.405)
+            lat += 0.0005
+        }
+        // user arrives and stays, the tracker is no longer seen
+        assertTrue(d.evaluate(25 * min).none { it.severity == Severity.HIGH })
     }
 
     @Test
@@ -132,7 +155,9 @@ class FollowDetectorTest {
             d.sighting("P1", "Kopfhörer", false, i * min, lat, 13.405)
             lat += 0.0006
         }
-        assertEquals(Severity.LOW, d.evaluate(25 * min).single().severity)
+        assertTrue("only travelling along", d.evaluate(25 * min).isEmpty())
+        for (i in 26..35) d.sighting("P1", "Kopfhörer", false, i * min, lat, 13.405)
+        assertEquals(Severity.LOW, d.evaluate(35 * min).single().severity)
     }
 
     @Test
@@ -147,8 +172,19 @@ class SpamDetectorTest {
     fun manyRandomAddressesTrigger() {
         val s = SpamDetector()
         var hit: Int? = null
-        for (i in 0 until 30) hit = s.record("addr$i", 1000L + i * 100) ?: hit
+        for (i in 0 until 40) s.record("normal${i % 3}", i * 1000L) // 40 s of normal surroundings
+        for (i in 0 until 80) hit = s.record("addr$i", 40_000L + i * 100) ?: hit
         assertTrue(hit != null)
+    }
+
+    @Test
+    fun crowdedTrainDoesNot() {
+        // 60 passengers' AirPods/iPhones, each repeating its address every ~300 ms
+        val s = SpamDetector()
+        var t = 0L
+        repeat(20) { for (i in 0 until 60) assertNull(s.record("dev$i", t++ * 50)) }
+        // ten new passengers board at once
+        repeat(5) { for (i in 0 until 70) assertNull(s.record("dev$i", t++ * 50)) }
     }
 
     @Test
@@ -208,6 +244,9 @@ class WifiAnalyzerTest {
         assertTrue(a.any { it.key.startsWith("camera") })
         val b = WifiAnalyzer.analyze(listOf(net("12:22:33:44:55:66", "Campingplatz", "[WPA2-PSK-CCMP]")), null, emptyMap(), 0)
         assertTrue(b.none { it.key.startsWith("camera") })
+        assertFalse(WifiAnalyzer.isCameraName("SONOS-AxQBBgABKZSfPgS6CAM="))
+        assertFalse(WifiAnalyzer.isCameraName("xyz6CAM="))
+        assertTrue(WifiAnalyzer.isCameraName("CAM-01"))
     }
 
     @Test

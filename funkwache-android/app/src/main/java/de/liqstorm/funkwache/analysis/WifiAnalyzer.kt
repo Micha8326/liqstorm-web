@@ -41,10 +41,15 @@ object WifiAnalyzer {
 
     // Short tokens must stand alone ("IPC_3F2A", "CAM-01"), so "Camping" does not match.
     private val cameraPattern = Regex(
-        "(?<![a-z])(cam|ipc|ipcam|camera|dvr|nvr|spycam)(?![a-z])|hdwifi|wificam|wifi_cam|v380|yoosee|xmeye|icsee|" +
+        "(?<![a-z0-9])(cam|ipc|ipcam|camera|dvr|nvr|spycam)(?![a-z])|hdwifi|wificam|wifi_cam|v380|yoosee|xmeye|icsee|" +
             "lookcam|hidvcam|ezviz|tapo_c|imou|reolink|eufycam|gw_ap|mv[0-9]{3,}",
         RegexOption.IGNORE_CASE
     )
+    /** Setup networks of speakers etc. that contain camera-like tokens. */
+    private val cameraExceptions = Regex("^(sonos|bose|heos|denon|marshall)", RegexOption.IGNORE_CASE)
+
+    fun isCameraName(ssid: String) = cameraPattern.containsMatchIn(ssid) && !cameraExceptions.containsMatchIn(ssid)
+
     private val attackPattern = Regex(
         "pineapple|marauder|deauth|wifiphisher|fluxion|airgeddon|evil ?twin|pwn|hak5|esp32-?attack",
         RegexOption.IGNORE_CASE
@@ -60,7 +65,7 @@ object WifiAnalyzer {
         }
         if (n.wps) f += "WPS aktiv (PIN-Angriffe möglich)"
         if (n.hidden) f += "Versteckte SSID"
-        if (cameraPattern.containsMatchIn(n.ssid)) f += "Mögliche Kamera"
+        if (isCameraName(n.ssid)) f += "Mögliche Kamera"
         if (attackPattern.containsMatchIn(n.ssid)) f += "Angriffs-Tool-Name"
         if (Oui.isPentestHardware(n.bssid)) f += "Pentest-Hardware"
         if (n.vendor?.startsWith("Espressif") == true) f += "ESP32/ESP8266-Modul"
@@ -129,7 +134,7 @@ object WifiAnalyzer {
                     "Der Name deutet auf ein WLAN-Angriffswerkzeug hin (${n.bssid}, ${n.rssi} dBm)."
                 )
             }
-            if (n.ssid.isNotEmpty() && cameraPattern.containsMatchIn(n.ssid)) {
+            if (n.ssid.isNotEmpty() && isCameraName(n.ssid)) {
                 out += Alert(
                     "camera-${n.bssid}", now, Severity.LOW, Source.WIFI,
                     "Mögliche WLAN-Kamera: „${n.ssid}“",

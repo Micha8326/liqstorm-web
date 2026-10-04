@@ -66,12 +66,21 @@ class FollowDetector {
             val span = last.t - tr.pts.first().t
             val located = tr.pts.count { p -> p.lat != null }
             val dist = maxDistance(tr.pts)
+            // In bus/train/car-sharing other people's devices travel along, so movement alone is not enough:
+            // the strong signal is a device that is still with you after you have arrived somewhere.
+            val arrived = arrivedTogether(tr.pts)
             val f: Finding? = if (tr.tracker) {
                 when {
-                    span >= 10 * 60_000L && tr.pts.size >= 3 && dist >= 300 -> Finding(
+                    arrived && tr.pts.size >= 4 -> Finding(
                         tr.id, tr.label, Severity.HIGH, "Tracker folgt dir",
-                        "${tr.label} (${tr.id}) ist seit ${span / 60000} min in deiner Nähe und hat sich " +
-                            "${dist.toInt()} m mit dir bewegt. Suche ihn mit der Funk-Suche (Bluetooth › Gerät › Orten)."
+                        "${tr.label} (${tr.id}) hat sich ${dist.toInt()} m mit dir bewegt und ist auch nach der Ankunft " +
+                            "noch bei dir (seit ${span / 60000} min). Suche ihn mit Bluetooth › Gerät › Orten – " +
+                            "Taschen, Jacke, Rucksack, Auto (Radkasten, Stoßstange, unter Sitzen)."
+                    )
+                    span >= 10 * 60_000L && tr.pts.size >= 3 && dist >= 300 -> Finding(
+                        tr.id, tr.label, Severity.LOW, "Tracker reist mit dir",
+                        "${tr.label} (${tr.id}) ist seit ${span / 60000} min über ${dist.toInt()} m mit dir unterwegs. " +
+                            "In Bus und Bahn normal (Mitreisende). Ist er nach der Ankunft immer noch da, kommt eine Warnung."
                     )
                     located < 2 && span >= 30 * 60_000L && buckets(tr.pts) >= 6 -> Finding(
                         tr.id, tr.label, Severity.MEDIUM, "Tracker dauerhaft in deiner Nähe",
@@ -81,9 +90,9 @@ class FollowDetector {
                     else -> null
                 }
             } else {
-                if (span >= 20 * 60_000L && tr.pts.size >= 5 && dist >= 1000) Finding(
+                if (arrived && span >= 20 * 60_000L && tr.pts.size >= 5 && dist >= 1000) Finding(
                     tr.id, tr.label, Severity.LOW, "Gerät begleitet dich",
-                    "${tr.label} (${tr.id}) war über ${dist.toInt()} m und ${span / 60000} min mit dir unterwegs. " +
+                    "${tr.label} (${tr.id}) war über ${dist.toInt()} m mit dir unterwegs und ist auch am Ziel noch da. " +
                         "Wenn es dein eigenes Gerät ist, markiere es als vertraut."
                 ) else null
             }
@@ -97,6 +106,22 @@ class FollowDetector {
 
     @Synchronized
     fun clear() = tracks.clear()
+
+    /**
+     * True when the device was seen at a place at least 300 m away from where it was first seen, and has
+     * stayed with you there (sightings within 150 m) for at least 8 minutes.
+     */
+    private fun arrivedTogether(pts: List<Pt>): Boolean {
+        val loc = pts.filter { it.lat != null && it.lon != null }
+        if (loc.size < 4) return false
+        val end = loc.last()
+        var i = loc.size - 1
+        while (i > 0 && haversine(end.lat!!, end.lon!!, loc[i - 1].lat!!, loc[i - 1].lon!!) <= 150) i--
+        val stay = loc.subList(i, loc.size)
+        val first = loc.first()
+        return stay.size >= 3 && end.t - stay.first().t >= 8 * 60_000L &&
+            haversine(first.lat!!, first.lon!!, end.lat!!, end.lon!!) >= 300
+    }
 
     private fun buckets(pts: List<Pt>) = pts.map { it.t / (5 * 60_000L) }.toSet().size
 
@@ -125,15 +150,28 @@ class FollowDetector {
  * from constantly changing random addresses. Legit environments rarely show more than a
  * handful of distinct pop-up advertisers in a few seconds.
  */
-class SpamDetector(private val windowMs: Long = 10_000, private val threshold: Int = 18) {
+class SpamDetector(private val windowMs: Long = 10_000, private val threshold: Int = 40) {
     private val events = ArrayDeque<Pair<Long, String>>()
+    private val firstSeen = HashMap<String, Long>()
+    private var startedAt = -1L
 
-    /** Returns the number of distinct pop-up advertisers in the window if it crosses the threshold. */
+    /**
+     * Returns the number of throw-away pop-up advertisers in the window if it crosses the threshold.
+     * Spam tools use a new random address for (almost) every packet, while real AirPods/phones in a
+     * crowded train keep their address and repeat it many times. Right after scanning starts every
+     * device is "new", so the first 30 s are only used to learn the surroundings.
+     */
     @Synchronized
     fun record(address: String, now: Long): Int? {
+        if (startedAt < 0) startedAt = now
         events.addLast(now to address)
+        firstSeen.putIfAbsent(address, now)
         while (events.isNotEmpty() && events.first().first < now - windowMs) events.removeFirst()
-        val distinct = events.mapTo(HashSet()) { it.second }.size
-        return if (distinct >= threshold) distinct else null
+        if (firstSeen.size > 5000) firstSeen.values.removeAll { it < now - 5 * 60_000L }
+        if (now - startedAt < 30_000) return null
+        val counts = HashMap<String, Int>()
+        for ((_, a) in events) counts[a] = (counts[a] ?: 0) + 1
+        val oneShot = counts.count { (a, c) -> c <= 2 && (firstSeen[a] ?: 0) >= now - windowMs }
+        return if (oneShot >= threshold) oneShot else null
     }
 }
