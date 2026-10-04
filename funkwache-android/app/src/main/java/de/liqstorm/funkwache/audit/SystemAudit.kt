@@ -108,10 +108,12 @@ object SystemAudit {
                         else -> AuditItem("Bluetooth aus", "Keine Bluetooth-Angriffsfläche – aber auch keine Tracker-Erkennung.", Severity.INFO, true, Settings.ACTION_BLUETOOTH_SETTINGS)
                     }
                 )
-                val bonded = a.bondedDevices?.map { "${it.name ?: "?"} (${it.address})" }?.sorted() ?: emptyList()
+                val devs = a.bondedDevices ?: emptySet()
+                val names = devs.associate { it.address to (it.name ?: "?") }
+                val bonded = devs.map { "${it.name ?: "?"} (${it.address})" }.sorted()
                 add(AuditItem("Gekoppelte Geräte: ${bonded.size}", bonded.joinToString("\n").ifEmpty { "keine" } +
                     "\nUnbekannte Einträge sofort entfernen.", Severity.INFO, true, Settings.ACTION_BLUETOOTH_SETTINGS))
-                baselineCheck("bonded", bonded.toSet(), Severity.MEDIUM, "Neues Bluetooth-Gerät gekoppelt")
+                if (on) baselineCheck("bonded_addr", names.keys, Severity.MEDIUM, "Neues Bluetooth-Gerät gekoppelt") { "${names[it]} ($it)" }
             }
         }
         safe {

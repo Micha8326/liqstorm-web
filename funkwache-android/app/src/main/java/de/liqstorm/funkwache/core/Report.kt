@@ -20,14 +20,9 @@ object Report {
         }
         sb.appendLine()
 
-        val ble = Hub.ble.value
-        sb.appendLine("== BLUETOOTH (${ble.size}) ==")
-        ble.forEach {
-            sb.appendLine(
-                "${it.address}  ${it.rssi} dBm  ${fmtDist(it.distance)}  ${it.kind.label}  ${it.label}" +
-                    (it.vendor?.let { v -> "  [$v]" } ?: "") +
-                    (it.tracker?.let { t -> "  TRACKER: ${t.label}${if (it.separated) " (getrennt)" else ""}" } ?: "")
-            )
+        sb.appendLine("== SYSTEM-CHECK ==")
+        Hub.audit.value.forEach {
+            sb.appendLine("[${if (it.ok) "OK" else it.severity.label}] ${it.title}: ${it.detail.replace('\n', ';')}")
         }
         sb.appendLine()
 
@@ -55,10 +50,16 @@ object Report {
             sb.appendLine("${g.sats.size} Satelliten, ${g.used} genutzt, Ø C/N0 %.1f dB-Hz, Streuung %.2f".format(g.meanCn0, g.stdCn0))
             sb.appendLine()
         }
-        sb.appendLine("== SYSTEM ==")
-        Hub.audit.value.forEach {
-            sb.appendLine("[${if (it.ok) "OK" else it.severity.label}] ${it.title}: ${it.detail.replace('\n', ';')}")
+        val ble = Hub.ble.value
+        sb.appendLine("== BLUETOOTH (${ble.size}) ==")
+        ble.forEach {
+            sb.appendLine(
+                "${it.address}  ${it.rssi} dBm  ${fmtDist(it.distance)}  ${it.kind.label}  ${it.label}" +
+                    (it.vendor?.let { v -> "  [$v]" } ?: "") +
+                    (it.tracker?.let { t -> "  TRACKER: ${t.label}${if (it.separated) " (getrennt)" else ""}" } ?: "")
+            )
         }
+        sb.appendLine()
         return sb.toString()
     }
 }

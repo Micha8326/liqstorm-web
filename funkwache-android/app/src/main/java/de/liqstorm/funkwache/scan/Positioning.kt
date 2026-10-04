@@ -28,6 +28,7 @@ object Positioning {
     private var lastGpsFix: Location? = null
     private var goodSince = 0L
     private var lastGood: GnssSnapshot? = null
+    private var gpsStartedAt = 0L
 
     private fun lm(ctx: Context) = ctx.applicationContext.getSystemService(LocationManager::class.java)
 
@@ -66,6 +67,9 @@ object Positioning {
             if (gps && lm.allProviders.contains(LocationManager.GPS_PROVIDER)) {
                 lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5_000L, 0f, listener, Looper.getMainLooper())
                 lm.registerGnssStatusCallback(gnssCallback, Handler(Looper.getMainLooper()))
+                gpsStartedAt = System.currentTimeMillis()
+                goodSince = 0L
+                lastGood = null
             }
             val last = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
                 .mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
@@ -157,14 +161,14 @@ object Positioning {
         } else {
             val good = lastGood
             if (good != null && goodSince != 0L && now - good.time < 15_000 && good.time - goodSince > 30_000 &&
-                (heard.size <= 2 || mean < 15)
+                gpsStartedAt != 0L && now - gpsStartedAt > 60_000 && heard.isNotEmpty() && mean < 20
             ) {
                 Hub.raise(
                     Alert(
                         "gnssjam-${now / 1800_000}", now, Severity.LOW, Source.GNSS,
                         "GNSS-Empfang schlagartig eingebrochen",
                         "Eben noch ${good.used} Satelliten genutzt, jetzt ${heard.size} hörbar (Ø ${"%.1f".format(mean)} dB-Hz). " +
-                            "Kann ein Störsender (Jammer) sein – oder einfach ein Gebäude/Tunnel."
+                            "Alle verbleibenden Signale sind schwach – typisch für einen Störsender (Jammer), aber auch für Tiefgarage/Tunnel."
                     )
                 )
             }

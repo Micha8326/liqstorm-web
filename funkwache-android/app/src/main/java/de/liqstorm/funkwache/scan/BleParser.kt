@@ -51,7 +51,7 @@ object BleParser {
         0x181C to "Benutzerdaten", 0x1802 to "Sofortalarm", 0x1803 to "Link Loss",
         0x1804 to "Sendeleistung", 0x184E to "LE Audio", 0x1850 to "LE Audio (PACS)",
         0xFD6F to "Exposure Notification (Corona-Warn)", 0xFE2C to "Google Fast Pair",
-        0xFEAA to "Eddystone / Google Find Hub", 0xFD5A to "Samsung SmartTag",
+        0xFEAA to "Eddystone / Google Find Hub", 0xFD5A to "Samsung SmartThings Find",
         0xFEED to "Tile", 0xFEEC to "Tile", 0xFE33 to "Chipolo", 0xFE9F to "Google",
         0xFE0F to "Philips Hue (Signify)", 0xFE03 to "Amazon", 0x3082 to "Flipper Zero",
     )
@@ -113,7 +113,10 @@ object BleParser {
         }
 
         // ---- trackers announced via service UUIDs
-        if (0xFD5A in shorts) setTracker(TrackerType.SAMSUNG, "Samsung SmartTag")
+        if (0xFD5A in shorts) {
+            setTracker(TrackerType.SAMSUNG, "SmartTag oder Galaxy-Gerät (SmartThings Find)")
+            notes += "Diese Kennung senden SmartTags, aber auch Galaxy-Handys, -Uhren und -Buds"
+        }
         if (0xFEED in shorts || 0xFEEC in shorts) setTracker(TrackerType.TILE, "Tile-Tracker")
         if (0xFE33 in shorts) setTracker(TrackerType.CHIPOLO, "Chipolo-Tracker")
         serviceData[uuid16(0xFEAA)]?.takeIf { it.isNotEmpty() }?.let { d ->

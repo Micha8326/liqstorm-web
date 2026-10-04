@@ -37,7 +37,7 @@ enum class DeviceKind(val label: String) {
 
 enum class TrackerType(val label: String) {
     APPLE_FINDMY("Apple Find My (AirTag o. ä.)"),
-    SAMSUNG("Samsung SmartTag"),
+    SAMSUNG("Samsung SmartThings Find"),
     TILE("Tile"),
     CHIPOLO("Chipolo"),
     GOOGLE_FMDN("Google Find Hub"),
@@ -70,8 +70,8 @@ data class BleDevice(
     /** Rough distance estimate in metres (log-distance path loss model). */
     val distance: Double
         get() {
-            val ref = txPower?.takeIf { it in -100..20 }?.let { it - 41 } ?: -59
-            return Math.pow(10.0, (ref - rssiSmooth) / (10 * 2.4))
+            // Advertised TX power is unreliable across vendors; a fixed 1 m reference is more consistent.
+            return Math.pow(10.0, (-59 - rssiSmooth) / (10 * 2.4))
         }
 }
 
