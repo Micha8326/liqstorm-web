@@ -26,6 +26,14 @@ object Report {
         }
         sb.appendLine()
 
+        sb.appendLine("== KAMERA & MIKROFON (letzte Nutzungen) ==")
+        de.liqstorm.funkwache.scan.PrivacyMonitor.log.value.take(40).forEach {
+            val dur = it.end?.let { e -> "${(e - it.start) / 1000} s" } ?: "läuft"
+            sb.appendLine("${df.format(Date(it.start))} ${it.kind} (${it.detail}) $dur" +
+                (if (it.screenOff) " BILDSCHIRM AUS" else "") + (if (it.inCall) " Telefonat" else ""))
+        }
+        sb.appendLine()
+
         val wifi = Hub.wifi.value
         sb.appendLine("== WLAN (${wifi.size}) ==")
         Hub.wifiConn.value?.let { c ->

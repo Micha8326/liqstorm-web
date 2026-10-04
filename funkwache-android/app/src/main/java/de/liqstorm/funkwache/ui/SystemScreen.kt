@@ -73,6 +73,7 @@ fun SystemScreen(act: MainActivity) {
                 "Geräteadmin, versteckte Apps mit Überwachungsrechten, Nutzer-Zertifikate, Proxy, Debugging, Root, " +
                 "Patchstand. Änderungen an diesen Punkten lösen automatisch eine Warnung aus.")
         }
+        item { PrivacyPanel(act) }
         items(audit) { AuditCard(it, act) }
 
         item { Section("Vertraute Geräte & Netze (${trusted.size})") }

@@ -218,6 +218,8 @@ object SystemAudit {
                 pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()))
             else @Suppress("DEPRECATION") pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
             val suspicious = ArrayList<String>()
+            val camApps = ArrayList<String>()
+            val micApps = ArrayList<String>()
             val sideloaded = ArrayList<String>()
             for (p in pkgs) {
                 val ai = p.applicationInfo ?: continue
@@ -234,6 +236,8 @@ object SystemAudit {
                 val req = p.requestedPermissions ?: continue
                 val flags = p.requestedPermissionsFlags ?: continue
                 val granted = req.indices.filter { flags[it] and PackageInfo.REQUESTED_PERMISSION_GRANTED != 0 }.map { req[it] }.toSet()
+                if (Manifest.permission.CAMERA in granted) camApps += label(p.packageName)
+                if (Manifest.permission.RECORD_AUDIO in granted) micApps += label(p.packageName)
                 val spy = spyPerms.count { it in granted }
                 val hidden = pm.getLaunchIntentForPackage(p.packageName) == null
                 if (!fromStore && ((hidden && spy >= 3) || spy >= 5)) {
@@ -246,6 +250,12 @@ object SystemAudit {
                 else AuditItem("Auffällige Apps (${suspicious.size})", suspicious.joinToString("\n") +
                     "\nMerkmale typischer Stalkerware. Prüfen und ggf. deinstallieren.", Severity.HIGH, false, Settings.ACTION_APPLICATION_SETTINGS)
             )
+            add(AuditItem("Kamera erlaubt: ${camApps.size} Apps", camApps.sorted().joinToString(", ").ifEmpty { "keine (außer System)" } +
+                "\nJede dieser Apps darf fotografieren/filmen, solange sie geöffnet ist. Unnötige Rechte entziehen.",
+                Severity.INFO, true, Settings.ACTION_PRIVACY_SETTINGS))
+            add(AuditItem("Mikrofon erlaubt: ${micApps.size} Apps", micApps.sorted().joinToString(", ").ifEmpty { "keine (außer System)" } +
+                "\nJede dieser Apps darf aufnehmen, solange sie geöffnet ist. Unnötige Rechte entziehen.",
+                Severity.INFO, true, Settings.ACTION_PRIVACY_SETTINGS))
             if (sideloaded.isNotEmpty()) add(
                 AuditItem("Apps außerhalb eines Stores: ${sideloaded.size}", sideloaded.sorted().joinToString(", "), Severity.INFO, true, Settings.ACTION_APPLICATION_SETTINGS)
             )

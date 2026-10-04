@@ -7,6 +7,7 @@ import de.liqstorm.funkwache.model.Source
 import de.liqstorm.funkwache.scan.BleScanner
 import de.liqstorm.funkwache.scan.CellScanner
 import de.liqstorm.funkwache.scan.Positioning
+import de.liqstorm.funkwache.scan.PrivacyMonitor
 import de.liqstorm.funkwache.scan.WifiScanner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +76,7 @@ object ScanEngine {
         Positioning.stop(app)
         Positioning.start(app, gps())
         WifiScanner.register(app)
+        PrivacyMonitor.start(app)
 
         // BLE: (re)start regularly – Android silently degrades long-running scans after ~30 min.
         launch {
