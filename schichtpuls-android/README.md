@@ -7,8 +7,10 @@ im eigenen Kalender pflegen. Mehrere Schichten pro Tag, frei änderbare Zeiten, 
 - `tools/wrap.py` packt sie vor dem Build nach `app/src/main/assets/index.html`.
 - `MainActivity` zeigt sie in einer WebView und liefert Fotoauswahl, Kamera, Speichern in
   Downloads und externe Links.
-- Daten bleiben auf dem Handy (localStorage). Die Foto-Erkennung nutzt einen eigenen
-  Anthropic-API-Schlüssel, der nur auf dem Gerät gespeichert wird.
+- Daten bleiben auf dem Handy (localStorage). Die Foto-Erkennung läuft auf dem Gerät
+  (Google ML Kit): kostenlos, offline, ohne API-Schlüssel.
+- Projektstand, Entscheidungen und nächste Schritte: `CLAUDE.md`.
+- Test der Dienstplan-Erkennung: `node tools/test_parser.cjs`.
 
 Jeder Push auf `schichtpuls-android/**` baut die APK per GitHub Actions und legt sie im Release
 `schichtpuls-latest` ab:
