@@ -346,14 +346,6 @@ textarea{min-height:70px;resize:vertical}
         <p class="hint">Genau so, wie er in der Namensspalte des Plans steht. Die Erkennung sucht danach.</p>
         <div class="row end"><button class="btn primary" id="saveName">Speichern</button></div>
       </div>
-      <div class="panel hud stack" id="keyPanel" hidden>
-        <p class="eyebrow">Foto-Erkennung</p>
-        <label class="f"><span>Anthropic API-Schlüssel</span>
-          <span class="row" style="flex-wrap:nowrap"><input type="password" id="setKey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"><button class="btn sq ghost" id="showKey" type="button" aria-label="Schlüssel zeigen">👁</button></span>
-        </label>
-        <p class="hint">Den Schlüssel bekommst du unter <a class="link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Er bleibt nur auf diesem Handy und geht direkt an Anthropic. Ein Scan kostet wenige Cent. Leg dort am besten ein kleines Ausgabenlimit fest.</p>
-        <div class="row end"><button class="btn primary" id="saveKey">Speichern</button></div>
-      </div>
       <div class="panel stack">
         <p class="eyebrow">Kalender &amp; Sicherung</p>
         <div class="row">
@@ -447,12 +439,9 @@ const DEFAULT_CODES = [
   {code:'K',  label:'Krank',            start:'',      end:'',      pause:0,  color:'#ff6b5e', kind:'absent'},
 ];
 const LOCAL_KEY = 'schichtpuls.v1';
-// Inside the Android app the page runs without claude.ai: data stays on the phone,
-// recognition calls the Anthropic API with the user's own key, files go through the app bridge.
+// Inside the Android app the page runs without claude.ai: data stays on the phone, photos are
+// read by the phone's own text recognition (free, offline), files go through the app bridge.
 const APP = window.SchichtpulsApp || null;
-const KEY_STORE = 'schichtpuls.apikey';
-const SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.127.0/+esm';
-const getKey = () => { try { return localStorage.getItem(KEY_STORE) || ''; } catch { return ''; } };
 
 /* ---------- state ---------- */
 const state = {name:'', codes: DEFAULT_CODES.map(c => ({...c})), months:{}};
@@ -811,14 +800,7 @@ $('#saveCodes').addEventListener('click', () => {
 
 /* ---------- settings ---------- */
 $('#saveName').addEventListener('click', () => { state.name = $('#setName').value.trim(); $('#scanName').value = state.name; store.saveSettings(); toast('Name gespeichert'); });
-if (APP){
-  $('#keyPanel').hidden = false; $('#setKey').value = getKey();
-  $('#showKey').addEventListener('click', () => { const i = $('#setKey'); i.type = i.type === 'password' ? 'text' : 'password'; });
-  $('#saveKey').addEventListener('click', () => {
-    try { localStorage.setItem(KEY_STORE, $('#setKey').value.trim()); } catch {}
-    updateScanAvailability(); toast($('#setKey').value.trim() ? 'Schlüssel gespeichert' : 'Schlüssel entfernt');
-  });
-}
+
 
 let downloads = null;
 (async () => {
@@ -895,7 +877,7 @@ let sample, imgLimits = null; // undefined = still checking
 function updateScanAvailability(){
   // Picking photos always works; only the recognition step depends on Claude being reachable.
   if (APP){
-    $('#scanHint').textContent = getKey() ? 'Die Erkennung schickt die Fotos verschlüsselt an Claude und dauert etwa eine Minute.' : 'Für die Foto-Erkennung trägst du einmal deinen API-Schlüssel unter „Mehr“ ein. Fotos auswählen und Dienste von Hand eintragen geht auch ohne.';
+    $('#scanHint').textContent = 'Die Erkennung läuft direkt auf deinem Handy. Sie ist kostenlos und funktioniert auch ohne Internet.';
     renderThumbs(); return;
   }
   const ok = !!(sample && imgLimits);
@@ -1012,49 +994,154 @@ Antworte nur mit diesem JSON-Objekt, mit genau einem Eintrag je Tag 1 bis ${n}:
 {"person_found": true, "matched_name": "Name wie auf dem Plan", "entries": [{"day": 1, "code": "F", "start": "", "end": "", "uncertain": false}], "unknown_codes": [{"code": "F2", "label": "Früh lang", "start": "06:00", "end": "16:00"}], "notes": "kurzer Hinweis auf Deutsch oder leer"}`;
 }
 
-/* Android app: call the Anthropic API directly with the user's key. */
-let sdkPromise = null;
-const RESULT_SCHEMA = {
-  type:'object', additionalProperties:false, required:['person_found','matched_name','entries','unknown_codes','notes'],
-  properties:{
-    person_found:{type:'boolean'}, matched_name:{type:'string'}, notes:{type:'string'},
-    entries:{type:'array', items:{type:'object', additionalProperties:false, required:['day','code','start','end','uncertain'],
-      properties:{day:{type:'integer'}, code:{type:'string'}, start:{type:'string'}, end:{type:'string'}, uncertain:{type:'boolean'}}}},
-    unknown_codes:{type:'array', items:{type:'object', additionalProperties:false, required:['code','label','start','end'],
-      properties:{code:{type:'string'}, label:{type:'string'}, start:{type:'string'}, end:{type:'string'}}}},
-  },
-};
-const blobToB64 = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(b); });
-async function recognizeViaApi(prompt, blobs, signal){
-  const fail = code => Object.assign(new Error(code), {code});
-  const Anthropic = await (sdkPromise ??= import(SDK_URL).then(m => m.default || m.Anthropic)).catch(() => { sdkPromise = null; throw fail('offline'); });
-  const client = new Anthropic({apiKey: getKey(), dangerouslyAllowBrowser: true});
-  const images = await Promise.all(blobs.map(async b => ({type:'image', source:{type:'base64', media_type:'image/jpeg', data: await blobToB64(b)}})));
-  let res;
-  try {
-    res = await client.beta.messages.create({
-      model:'claude-opus-5-5', max_tokens:16000,
-      betas:['server-side-fallback-2026-07-01'], fallbacks:'default',
-      output_config:{effort:'high', format:{type:'json_schema', schema: RESULT_SCHEMA}},
-      messages:[{role:'user', content:[...images, {type:'text', text: prompt}]}],
-    }, {signal});
-  } catch (err){
-    if (signal.aborted || err instanceof Anthropic.APIUserAbortError) throw fail('cancelled');
-    if (err instanceof Anthropic.AuthenticationError) throw fail('bad_key');
-    if (err instanceof Anthropic.PermissionDeniedError) throw fail('bad_key');
-    if (err instanceof Anthropic.RateLimitError) throw fail('rate_limited');
-    if (err instanceof Anthropic.APIConnectionError) throw fail('offline');
-    throw fail('upstream_error');
+/* Android app: the phone's own text recognition (ML Kit, on-device) returns words with positions;
+   parseRoster turns them into one person's shifts. No account, no costs, works offline. */
+/* Reads one person's row out of on-device OCR results of a photographed duty roster.
+   Input: words with boxes {t, x, y, w, h} in upright image pixels.
+   Finds the row of day numbers (1..31) as columns, the person's name as the row,
+   and maps every word on that row to the nearest day column. Handles slight tilt and
+   rosters split into side-by-side halves (1-15 | 16-31). */
+function parseRoster(ocr, {name, days, codes}){
+  const els = (ocr?.els || []).filter(e => e && e.t && e.w > 0 && e.h > 0).map(e => ({...e, t: String(e.t).trim(), cx: e.x + e.w/2, cy: e.y + e.h/2}));
+  const median = a => { const s = [...a].sort((p,q) => p-q); return s.length ? s[Math.floor(s.length/2)] : 0; };
+  const H = median(els.map(e => e.h)) || 20;
+  const fold = s => s.toLowerCase().replace(/ä/g,'a').replace(/ö/g,'o').replace(/ü/g,'u').replace(/ß/g,'ss').replace(/[^a-z0-9]/g,'');
+  const lev = (a, b) => { const m = a.length, n = b.length, d = Array.from({length:m+1}, (_,i) => [i, ...Array(n).fill(0)]); for (let j=1;j<=n;j++) d[0][j]=j;
+    for (let i=1;i<=m;i++) for (let j=1;j<=n;j++) d[i][j] = Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1] + (a[i-1]===b[j-1]?0:1)); return d[m][n]; };
+
+  /* ---- day header: number words grouped into rows (tolerating tilt), longest increasing run ---- */
+  const nums = els.map(e => { const m = /^(\d{1,2})\.?$/.exec(e.t); const v = m ? +m[1] : 0; return v >= 1 && v <= 31 ? {...e, v} : null; }).filter(Boolean);
+  const parent = nums.map((_,i) => i), find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
+  for (let i=0;i<nums.length;i++) for (let j=i+1;j<nums.length;j++){
+    const a = nums[i], b = nums[j];
+    if (Math.abs(a.cy - b.cy) < 0.6*Math.max(a.h,b.h) + Math.abs(a.cx - b.cx)*0.07) parent[find(i)] = find(j);
   }
-  if (res.stop_reason === 'refusal') throw fail('refused');
-  if (res.stop_reason === 'max_tokens') throw fail('invalid_json');
-  try { return JSON.parse(res.content.filter(b => b.type === 'text').map(b => b.text).join('')); }
-  catch { throw fail('invalid_json'); }
+  const groups = {}; nums.forEach((e,i) => (groups[find(i)] ??= []).push(e));
+  const headers = [];
+  for (const g of Object.values(groups)){
+    const s = g.sort((a,b) => a.cx - b.cx);
+    // longest run with strictly increasing day numbers from left to right
+    const best = Array(s.length).fill(1), prev = Array(s.length).fill(-1);
+    for (let i=0;i<s.length;i++) for (let j=0;j<i;j++) if (s[j].v < s[i].v && best[j]+1 > best[i]){ best[i] = best[j]+1; prev[i] = j; }
+    let k = best.indexOf(Math.max(...best)); const run = [];
+    while (k >= 0){ run.unshift(s[k]); k = prev[k]; }
+    if (run.length >= 5) headers.push(run);
+  }
+
+  /* ---- candidate name positions ---- */
+  const tokens = String(name).split(/[\s,.;/]+/).map(fold).filter(t => t.length >= 3);
+  const cands = [];
+  for (const e of els){
+    const f = fold(e.t); if (f.length < 3) continue;
+    for (const t of tokens){
+      const dist = f === t ? 0 : f.startsWith(t) || t.startsWith(f) && f.length >= 4 ? 0.5 : t.length >= 5 ? lev(f, t) : 9;
+      if (dist <= 1) cands.push({e, dist});
+    }
+  }
+
+  const known = new Map(codes.map(c => [c.code.toUpperCase(), c.code]));
+  const freeCode = codes.find(c => c.kind === 'free')?.code || '';
+  const CONFUSE = {'0':'O','O':'0','5':'S','S':'5','8':'B','B':'8','1':'I','I':'1','L':'1','2':'Z','Z':'2'};
+  function toCode(raw){
+    const t = raw.replace(/[|·•:;,'"`´]/g,'').trim();
+    if (!t) return null;
+    if (/^[-–—/\\xX]$/.test(t) && freeCode && !known.has('X')) return {code: freeCode, sure: true};
+    const u = t.toUpperCase();
+    if (known.has(u)) return {code: known.get(u), sure: true};
+    const alt = [...u].map(ch => CONFUSE[ch] || ch).join('');
+    if (known.has(alt)) return {code: known.get(alt), sure: false};
+    if (/^[-–—/\\]$/.test(t)) return {code: freeCode, sure: false};
+    if (t.length > 6 || /^\d{3,}$/.test(t)) return null; // hour totals, long words: not a shift
+    return {code: t, sure: false};
+  }
+
+  function readRow(cand){
+    const n = cand.e;
+    // header rows above this name, nearest first; side-by-side halves sit at about the same height
+    const above = headers.map(r => ({r, y: median(r.map(e => e.cy))})).filter(o => o.y < n.cy - 0.3*n.h).sort((a,b) => b.y - a.y);
+    const cols = {}; let slope = 0;
+    if (above.length){
+      const y0 = above[0].y, use = above.filter(o => Math.abs(o.y - y0) < 3*H);
+      for (const {r} of use){
+        for (const e of r) cols[e.v] = {x: e.cx, y: e.cy, real: true};
+        // fill gaps inside this run by linear interpolation
+        for (let i=0;i<r.length-1;i++){ const a = r[i], b = r[i+1];
+          for (let d=a.v+1; d<b.v; d++){ const f = (d-a.v)/(b.v-a.v); cols[d] ??= {x: a.cx + f*(b.cx-a.cx), y: a.cy + f*(b.cy-a.cy), real: false}; } }
+        const sp = (r.at(-1).cx - r[0].cx) / Math.max(1, r.at(-1).v - r[0].v);
+        for (let d = r.at(-1).v+1; d <= Math.min(days, r.at(-1).v+3); d++) cols[d] ??= {x: r.at(-1).cx + sp*(d - r.at(-1).v), y: r.at(-1).cy, real: false};
+        for (let d = r[0].v-1; d >= Math.max(1, r[0].v-3); d--) cols[d] ??= {x: r[0].cx - sp*(r[0].v - d), y: r[0].cy, real: false};
+        if (r.length > 1) slope = (r.at(-1).cy - r[0].cy) / (r.at(-1).cx - r[0].cx || 1);
+      }
+    }
+    const colList = Object.entries(cols).map(([d,c]) => ({d:+d, ...c})).filter(c => c.d <= days).sort((a,b) => a.x - b.x);
+    const spacing = colList.length > 1 ? median(colList.slice(1).map((c,i) => c.x - colList[i].x)) : 0;
+    const rowEls = els.filter(e => e !== n && e.cx > n.x + n.w*0.6 && Math.abs(e.cy - (n.cy + slope*(e.cx - n.cx))) < 0.6*Math.max(n.h, H));
+    const entries = {};
+    if (colList.length >= 5 && spacing > 0){
+      for (const e of rowEls){
+        // a word spanning several columns ("FSN") is split into one character per column
+        const spanned = colList.filter(c => c.x >= e.x - spacing*0.25 && c.x <= e.x + e.w + spacing*0.25);
+        const parts = spanned.length > 1 && e.t.length === spanned.length ? spanned.map((c,i) => ({c, t: e.t[i]})) : [{c: colList.reduce((a,b) => Math.abs(b.x-e.cx) < Math.abs(a.x-e.cx) ? b : a), t: e.t}];
+        for (const {c, t} of parts){
+          if (Math.abs(c.x - (parts.length > 1 ? c.x : e.cx)) > spacing*0.6) continue;
+          const m = toCode(t); if (!m) continue;
+          const prev = entries[c.d];
+          entries[c.d] = prev ? {code: prev.code + '/' + m.code, sure: false, real: c.real} : {...m, real: c.real};
+        }
+      }
+    } else {
+      // no day numbers found: assume one word per day in order
+      rowEls.sort((a,b) => a.cx - b.cx).slice(0, days).forEach((e,i) => { const m = toCode(e.t); if (m) entries[i+1] = {...m, sure: false, real: false}; });
+    }
+    const hits = Object.values(entries).filter(x => x.sure).length;
+    return {entries, hits, header: colList.length >= 5, cand};
+  }
+
+  let best = null;
+  for (const c of cands){ const r = readRow(c); if (!best || r.hits - c.dist > best.hits - best.cand.dist) best = r; }
+  const out = {person_found: !!best, matched_name: best ? best.cand.e.t : '', entries: [], unknown_codes: [], notes: '', score: best ? best.hits : 0, headers: headers.length};
+  for (let d=1; d<=days; d++){
+    const x = best?.entries[d];
+    out.entries.push({day: d, code: x?.code || '', start: '', end: '', uncertain: !!x && (!x.sure || !x.real)});
+  }
+  if (!best) out.notes = cands.length ? '' : 'Dein Name wurde auf dem Foto nicht gefunden. Prüfe die Schreibweise unter „Name auf dem Plan“.';
+  else if (!best.header) out.notes = 'Die Tagesnummern über den Spalten wurden nicht erkannt. Die Tage sind der Reihe nach zugeordnet, bitte genau prüfen.';
+  return out;
+}
+
+const ocrWaiters = {};
+window.__ocrDone = (id, result, err) => {
+  const w = ocrWaiters[id]; if (!w) return; delete ocrWaiters[id];
+  if (err || !result) w.rej(Object.assign(new Error(err || 'ocr'), {code:'ocr_failed'})); else w.res(result);
+};
+function ocrNative(b64, rotation){
+  return new Promise((res, rej) => { const id = Math.random().toString(36).slice(2); ocrWaiters[id] = {res, rej}; APP.ocr(id, b64, rotation); });
+}
+const blobToB64 = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(b); });
+async function recognizeOnDevice({year, month, name}, signal){
+  const days = daysIn(year, month), cancelled = () => Object.assign(new Error('cancelled'), {code:'cancelled'});
+  let merged = null;
+  for (let i=0; i<photos.length; i++){
+    setStatus('busy', photos.length > 1 ? `Foto ${i+1} von ${photos.length} wird gelesen` : 'Foto wird gelesen');
+    const bmp = await bitmapOf(photos[i].file);
+    const b64 = await blobToB64(await crop(bmp, 0, 0, bmp.width, bmp.height, 3200)); bmp.close?.();
+    let best = null;
+    for (const rot of [0, 90, 270]){ // a roster photographed sideways is tried turned as well
+      if (signal.aborted) throw cancelled();
+      const r = parseRoster(await ocrNative(b64, rot), {name, days, codes: state.codes});
+      if (!best || r.score > best.score) best = r;
+      if (best.score >= Math.min(8, days/3)) break;
+    }
+    if (!merged) merged = best;
+    else best.entries.forEach((e,k) => { const m = merged.entries[k]; if (e.code && (!m.code || (m.uncertain && !e.uncertain))) merged.entries[k] = e; });
+    if (!merged.person_found && best.person_found){ merged.person_found = true; merged.matched_name = best.matched_name; }
+  }
+  if (signal.aborted) throw cancelled();
+  return merged;
 }
 
 const SAMPLE_ERRORS = {
-  bad_key: 'Der API-Schlüssel wurde abgelehnt. Bitte unter „Mehr“ prüfen.',
-  offline: 'Keine Internetverbindung. Bitte später erneut versuchen.',
+  ocr_failed: 'Das Foto konnte nicht gelesen werden. Bitte ein schärferes Foto nehmen.',
   not_granted: 'Du hast der App nicht erlaubt, Claude zu nutzen. Lade die Seite neu, um erneut gefragt zu werden.',
   sampling_disabled: 'Claude ist für dein Konto hier nicht verfügbar.',
   images_unavailable: 'Bilder senden geht in dieser Ansicht nicht.',
@@ -1071,17 +1158,19 @@ $('#recognizeBtn').addEventListener('click', async () => {
   const month = +$('#scanMonth').value, year = +$('#scanYear').value, name = $('#scanName').value.trim();
   if (!name){ toast('Bitte deinen Namen so eintragen, wie er auf dem Plan steht.'); $('#scanName').focus(); return; }
   if (!(year >= 2000 && year <= 2100)){ toast('Bitte ein gültiges Jahr eintragen.'); return; }
-  if (APP && !getKey()){ setStatus('err', 'Bitte zuerst unter „Mehr“ deinen API-Schlüssel eintragen.'); return; }
   if (!APP && !(sample && imgLimits)){ setStatus('err', sample === undefined ? 'Verbindung zu Claude wird noch aufgebaut. Bitte gleich nochmal tippen.' : 'Die Erkennung ist in dieser Ansicht nicht verfügbar. Öffne den Link angemeldet in Chrome und versuche es dort.'); return; }
   if (name !== state.name){ state.name = name; store.saveSettings(); }
   renderThumbs(true); $('#stopBtn').hidden = false;
   setStatus('busy', 'Fotos werden vorbereitet');
   ctl = new AbortController();
   try {
-    const {blobs, legend} = await buildImages();
-    setStatus('busy', 'Claude liest den Plan, das dauert etwa eine Minute');
-    const prompt = buildPrompt({year, month, name, legend});
-    const data = APP ? await recognizeViaApi(prompt, blobs, ctl.signal) : await sample.json(prompt, {images: blobs, modelTier:'complex', signal: ctl.signal, cache:false});
+    let data;
+    if (APP) data = await recognizeOnDevice({year, month, name}, ctl.signal);
+    else {
+      const {blobs, legend} = await buildImages();
+      setStatus('busy', 'Claude liest den Plan, das dauert etwa eine Minute');
+      data = await sample.json(buildPrompt({year, month, name, legend}), {images: blobs, modelTier:'complex', signal: ctl.signal, cache:false});
+    }
     const n = daysIn(year, month), entries = {};
     for (const e of Array.isArray(data?.entries) ? data.entries : []){
       const d = Number(e?.day); if (!(d>=1 && d<=n)) continue;

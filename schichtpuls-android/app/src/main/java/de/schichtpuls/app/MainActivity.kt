@@ -4,10 +4,12 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -21,21 +23,27 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 
 /**
  * Hosts the Schichtpuls page (assets/index.html) in a WebView.
  *
  * The page is served from https://appassets.androidplatform.net so it gets a normal https origin
- * (localStorage, fetch to the Anthropic API). The activity supplies what a WebView lacks on its own:
- * the photo picker and camera for <input type=file>, saving exports to Downloads, and opening
- * external links in the browser.
+ * (localStorage). The activity supplies what a WebView lacks on its own: the photo picker and camera
+ * for <input type=file>, on-device text recognition of roster photos, saving exports to Downloads,
+ * and opening external links in the browser.
  */
 class MainActivity : ComponentActivity() {
 
     private lateinit var web: WebView
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var cameraUri: Uri? = null
+    private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
 
     private val pickImages =
         registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PHOTOS)) { uris ->
@@ -142,8 +150,47 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun replyOcr(id: String, json: String?, error: String?) {
+        val js = "window.__ocrDone(${JSONObject.quote(id)}, ${json ?: "null"}, ${JSONObject.quote(error ?: "")})"
+        runOnUiThread { web.evaluateJavascript(js, null) }
+    }
+
     /** Called from the page as window.SchichtpulsApp. */
     inner class Bridge {
+        /**
+         * Reads all words on a photo (base64 JPEG) with their positions, turned by [rotation] degrees.
+         * Answers asynchronously through window.__ocrDone(id, {w, h, els:[{t,x,y,w,h}]}, error).
+         */
+        @JavascriptInterface
+        fun ocr(id: String, jpegBase64: String, rotation: Int) {
+            val bitmap = try {
+                val bytes = Base64.decode(jpegBase64, Base64.DEFAULT)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (e: Exception) {
+                null
+            }
+            if (bitmap == null) {
+                replyOcr(id, null, "decode")
+                return
+            }
+            val image = InputImage.fromBitmap(bitmap, rotation)
+            recognizer.process(image)
+                .addOnSuccessListener { text ->
+                    val els = JSONArray()
+                    for (block in text.textBlocks) for (line in block.lines) for (el in line.elements) {
+                        val b = el.boundingBox ?: continue
+                        els.put(JSONObject().put("t", el.text).put("x", b.left).put("y", b.top).put("w", b.width()).put("h", b.height()))
+                    }
+                    val turned = rotation == 90 || rotation == 270
+                    val result = JSONObject()
+                        .put("w", if (turned) bitmap.height else bitmap.width)
+                        .put("h", if (turned) bitmap.width else bitmap.height)
+                        .put("els", els)
+                    replyOcr(id, result.toString(), null)
+                }
+                .addOnFailureListener { replyOcr(id, null, "ocr") }
+        }
+
         /** Saves an export into the phone's Downloads folder. Returns "ok", "shared" or "error". */
         @JavascriptInterface
         fun saveFile(name: String, mime: String, content: String): String {
