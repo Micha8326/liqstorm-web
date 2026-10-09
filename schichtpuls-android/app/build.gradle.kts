@@ -14,6 +14,8 @@ android {
         // Every CI build gets a higher number, so a new APK installs over the old one.
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionName = "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+        // Only 64-bit ARM, which every current Android phone uses; keeps the bundled OCR model small.
+        ndk { abiFilters += listOf("arm64-v8a") }
     }
 
     signingConfigs {
