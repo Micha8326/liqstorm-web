@@ -1,0 +1,1164 @@
+<title>Schichtpuls</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one-column phone app — pulse header, month HUD, calendar grid, bottom tab bar. Dark single-world by design. */
+:root{
+  color-scheme:dark;
+  --bg:#070b14;          /* night-shift navy */
+  --bg-2:#0b1220;
+  --panel:#0e1726;
+  --panel-2:#13203a;
+  --line:#1b2c44;
+  --line-2:#28405f;
+  --fg:#e4eef8;
+  --muted:#8b9db4;
+  --accent:#22d3ee;      /* monitor cyan */
+  --accent-dim:#1b6b60;
+  --alert:#ff6b5e;       /* alarm coral */
+  --warn:#ffc65c;        /* attention amber */
+  --ok:#55e39b;
+  --display:"Exo 2","Segoe UI",system-ui,sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:14px;
+  --tabs-h:64px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);pointer-events:none}
+label.btn{user-select:none}
+html,body{min-height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(80vw 50vh at 15% -10%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 70%),
+    radial-gradient(70vw 50vh at 110% 20%,color-mix(in srgb,#5b7cff 12%,transparent),transparent 70%),
+    linear-gradient(color-mix(in srgb,var(--accent) 5%,transparent) 1px,transparent 1px) 0 0/100% 32px;
+  mask-image:linear-gradient(#000 30%,transparent 95%)}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3,.disp{font-family:var(--display);letter-spacing:.02em;text-wrap:balance}
+.wrap{position:relative;z-index:1;max-width:760px;margin:0 auto;padding-inline:16px;padding-block:0 calc(var(--tabs-h) + 32px + env(safe-area-inset-bottom,0px))}
+
+/* header with ECG pulse */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px 4px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--panel);border:1px solid var(--line-2);box-shadow:0 0 18px color-mix(in srgb,var(--accent) 25%,transparent)}
+.brand-mark svg{width:22px;height:22px}
+.brand b{font-family:var(--display);font-size:20px;font-weight:700;letter-spacing:.06em}
+.brand small{display:block;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--accent);margin-top:-3px}
+.chip{font-family:var(--display);font-size:11.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--line-2);border-radius:999px;padding:4px 10px;color:var(--muted);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.chip i{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.chip.live{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+.chip.live i{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:beat 1.2s ease-in-out infinite}
+.chip.local{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.chip.local i{background:var(--warn)}
+@keyframes beat{0%,100%{transform:scale(1)}15%{transform:scale(1.5)}30%{transform:scale(1)}}
+.ecg{display:block;width:100%;height:46px;margin-block:2px 4px}
+.ecg path{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 70%,transparent))}
+.ecg .trace{stroke-dasharray:420 480;animation:trace 3.2s linear infinite}
+.ecg .base{stroke:var(--line-2);stroke-width:1;filter:none}
+@keyframes trace{from{stroke-dashoffset:900}to{stroke-dashoffset:0}}
+
+.eyebrow{font-family:var(--display);font-size:12px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);margin:0}
+h2{font-size:clamp(24px,6vw,32px);line-height:1.1;margin:2px 0 6px;font-weight:700}
+.sub{color:var(--muted);margin:0 0 16px;max-width:62ch}
+.view{display:none}
+.view.on{display:block;animation:in .3s ease}
+@keyframes in{from{opacity:.4;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.panel{background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:var(--r);padding:16px;position:relative}
+.panel.hud::before,.panel.hud::after{content:"";position:absolute;width:14px;height:14px;border:2px solid var(--accent);opacity:.7;pointer-events:none}
+.panel.hud::before{top:-1px;left:-1px;border-right:0;border-bottom:0;border-top-left-radius:var(--r)}
+.panel.hud::after{bottom:-1px;right:-1px;border-left:0;border-top:0;border-bottom-right-radius:var(--r)}
+.stack{display:grid;gap:14px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.row.between{justify-content:space-between}
+.row.end{justify-content:flex-end}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:9px 16px;border-radius:11px;border:1px solid var(--line-2);background:var(--panel-2);cursor:pointer;
+  font-family:var(--display);font-weight:600;font-size:14px;letter-spacing:.08em;text-transform:uppercase;transition:border-color .15s,background .15s,box-shadow .15s}
+.btn:hover{border-color:var(--accent)}
+.btn:focus-visible,.tab:focus-visible,.day:focus-visible,.pick button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:linear-gradient(180deg,#22d3ee,#0aa5c2);border-color:transparent;color:#04121a;border-radius:999px;padding-inline:20px;box-shadow:0 0 26px color-mix(in srgb,var(--accent) 40%,transparent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--alert);border-color:color-mix(in srgb,var(--alert) 45%,transparent);background:color-mix(in srgb,var(--alert) 8%,var(--panel))}
+.btn.ghost{background:transparent}
+.btn.sq{width:42px;padding:0;font-size:20px}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* forms */
+.f{display:grid;gap:6px}
+.f > span{font-family:var(--display);font-size:11.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+input[type=text],input[type=number],input[type=time],select,textarea{width:100%;min-height:42px;background:var(--bg-2);border:1px solid var(--line-2);border-radius:10px;padding:9px 11px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+input[type=time]{font-family:var(--mono);font-variant-numeric:tabular-nums}
+input[type=color]{width:42px;height:42px;padding:3px;border:1px solid var(--line-2);border-radius:10px;background:var(--bg-2);cursor:pointer}
+textarea{min-height:70px;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.check{display:flex;gap:10px;align-items:center;font-size:14px;cursor:pointer}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+
+/* month HUD */
+.monthbar{display:flex;align-items:center;gap:10px;margin-block:6px 12px}
+.monthbar h2{flex:1;text-align:center;margin:0}
+.monthbar h2 small{display:block;font-family:var(--mono);font-size:12px;letter-spacing:.3em;color:var(--muted);font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:9px 11px;min-width:0}
+.stat b{display:block;font-family:var(--display);font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat small{font-family:var(--display);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.stat.h b{color:var(--accent);text-shadow:0 0 14px color-mix(in srgb,var(--accent) 40%,transparent)}
+.stat.n b{color:#9aa8ff}
+
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.dow{font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:center;padding-bottom:2px}
+.dow.we{color:color-mix(in srgb,var(--alert) 80%,var(--muted))}
+.day{position:relative;min-height:74px;min-width:0;padding:6px 5px 8px;border-radius:10px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg-2) 80%,transparent);
+  display:flex;flex-direction:column;gap:4px;text-align:left;cursor:pointer;overflow:hidden;transition:border-color .15s,transform .15s}
+.day:hover{border-color:var(--line-2);transform:translateY(-1px)}
+.day.pad{visibility:hidden}
+.day .n{font-family:var(--mono);font-size:13px;line-height:1;color:var(--muted)}
+.day.we .n{color:color-mix(in srgb,var(--alert) 80%,var(--muted))}
+.day.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent),0 0 18px color-mix(in srgb,var(--accent) 18%,transparent)}
+.day.today .n{color:var(--accent)}
+.code{align-self:flex-start;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--display);font-weight:700;font-size:14px;line-height:1;padding:4px 7px;border-radius:7px;
+  color:var(--c);border:1px solid color-mix(in srgb,var(--c) 55%,transparent);background:color-mix(in srgb,var(--c) 14%,transparent)}
+.day .t{font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.day::after{content:"";position:absolute;left:6px;right:6px;bottom:3px;height:2px;border-radius:2px;background:var(--c,transparent);opacity:.8}
+.day .dot{position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--warn)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:12px}
+.legend span{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.legend i{width:9px;height:9px;border-radius:3px;background:var(--c)}
+
+.empty{display:grid;gap:4px;justify-items:center;text-align:center;padding:22px 8px;color:var(--muted)}
+.empty b{font-family:var(--display);font-size:18px;color:var(--fg)}
+.list{list-style:none;margin:0;padding:0}
+.list li{display:grid;grid-template-columns:62px 46px minmax(0,1fr);gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.list li:last-child{border-bottom:0}
+.list .d{font-family:var(--mono);font-size:13px}
+.list .d small{display:block;font-family:var(--display);font-size:10.5px;letter-spacing:.16em;color:var(--muted)}
+.list .l{min-width:0}
+.list .l .tm{font-family:var(--mono);white-space:nowrap}
+.list .l small{display:block;color:var(--muted);font-size:12.5px;overflow-wrap:anywhere}
+.list .code{justify-self:center}
+
+/* scan */
+.drop{border:1.5px dashed color-mix(in srgb,var(--accent) 45%,transparent);border-radius:var(--r);padding:18px;display:grid;gap:12px;justify-items:center;text-align:center;background:color-mix(in srgb,var(--accent) 4%,transparent)}
+.drop.over{border-color:var(--warn)}
+.drop p{margin:0;color:var(--muted);max-width:44ch}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;width:100%}
+.thumb{position:relative;aspect-ratio:3/4;max-width:100%;border-radius:10px;overflow:hidden;border:1px solid var(--line-2);background:#000}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb button{position:absolute;top:6px;right:6px;width:30px;height:30px;border-radius:50%;border:1px solid var(--line-2);background:color-mix(in srgb,var(--bg) 80%,transparent);cursor:pointer}
+.thumb.scanning::after{content:"";position:absolute;left:0;right:0;height:26%;top:-26%;background:linear-gradient(transparent,color-mix(in srgb,var(--accent) 40%,transparent) 75%,var(--accent) 97%,transparent);animation:scan 1.5s linear infinite}
+@keyframes scan{to{top:100%}}
+.status{display:flex;gap:10px;align-items:center;font-size:14px;color:var(--accent);min-height:24px}
+.status.err{color:var(--alert)}
+.status.ok{color:var(--ok)}
+.spin{width:16px;height:16px;flex:none;border-radius:50%;border:2px solid color-mix(in srgb,var(--accent) 25%,transparent);border-top-color:var(--accent);animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.notice{border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 7%,transparent);border-radius:0 10px 10px 0;padding:8px 12px;font-size:14px}
+.review{display:grid;gap:6px}
+.rv{display:grid;grid-template-columns:58px minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:center;padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--bg-2)}
+.rv.unsure{border-color:color-mix(in srgb,var(--warn) 70%,transparent);background:color-mix(in srgb,var(--warn) 6%,var(--bg-2))}
+.rv .dd{font-family:var(--mono);font-size:13px;line-height:1.15}
+.rv .dd small{display:block;font-family:var(--display);font-size:10.5px;letter-spacing:.14em;color:var(--muted)}
+.rv.we .dd{color:color-mix(in srgb,var(--alert) 80%,var(--fg))}
+.rv select,.rv input{min-height:38px;padding:6px 8px;font-size:14px}
+
+/* codes */
+.codes{display:grid;gap:10px}
+.cd{display:grid;grid-template-columns:42px 64px minmax(0,1fr) 42px;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.cd:last-child{border-bottom:0}
+.cd .c-key{text-align:center;font-family:var(--display);font-weight:700;color:var(--c)}
+.cd .rm{border:1px solid var(--line-2);border-radius:10px;background:transparent;cursor:pointer;color:var(--muted);height:42px}
+.cd .rm:hover{color:var(--alert);border-color:var(--alert)}
+.cd .lbl{font-size:10.5px;color:var(--muted);font-family:var(--display);letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:2px}
+.cd .c-s,.cd .c-e,.cd .c-p,.cd .c-kind{min-width:0}
+.cd2{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;grid-column:1/-1}
+
+/* tabs */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:6px 10px calc(6px + env(safe-area-inset-bottom,0px));background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line)}
+.tabs .in{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;min-height:52px;justify-content:center;border-radius:12px;border:1px solid transparent;background:transparent;cursor:pointer;color:var(--muted);font-family:var(--display);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}
+.tab svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tab.on{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 35%,transparent);background:color-mix(in srgb,var(--accent) 9%,transparent)}
+
+/* sheet */
+.sheet{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-end;justify-content:center;background:color-mix(in srgb,#000 60%,transparent)}
+.sheet[hidden]{display:none!important}
+.sheet-box{width:min(560px,100%);max-height:92%;overflow:auto;background:var(--panel);border:1px solid var(--line-2);border-bottom:0;border-radius:20px 20px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom,0px));display:grid;gap:14px;animation:up .22s ease}
+@keyframes up{from{transform:translateY(30px);opacity:.5}to{transform:none;opacity:1}}
+.grab{width:42px;height:4px;border-radius:2px;background:var(--line-2);margin:-4px auto 0}
+.pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(68px,1fr));gap:8px}
+.pick button{border-radius:10px;padding:8px 4px 6px;cursor:pointer;border:1px solid color-mix(in srgb,var(--c) 40%,transparent);background:color-mix(in srgb,var(--c) 8%,transparent);color:var(--c);font-family:var(--display);font-weight:700;font-size:17px;line-height:1.05;min-width:0}
+.pick button small{display:block;font-family:var(--body);font-weight:400;font-size:10.5px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick button.on{background:color-mix(in srgb,var(--c) 24%,transparent);box-shadow:0 0 0 2px var(--c)}
+.link{color:var(--accent);font-size:14px}
+.sec-lbl{font-family:var(--display);font-size:11.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 -6px}
+.srows{display:grid;gap:10px}
+.srow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 42px;grid-template-areas:"sel sel rm" "s e tools";gap:8px;padding:10px;border-radius:12px;border:1px solid var(--line);border-left:3px solid var(--c,var(--line-2));background:var(--bg-2)}
+.srow.active{border-color:color-mix(in srgb,var(--accent) 55%,transparent);border-left-color:var(--c,var(--accent))}
+.srow select{grid-area:sel}.srow .s{grid-area:s}.srow .e{grid-area:e}
+.srow .rm{grid-area:rm;height:42px;border-radius:10px;border:1px solid var(--line-2);background:transparent;color:var(--muted);cursor:pointer}
+.srow .rm:hover{color:var(--alert);border-color:var(--alert)}
+.srow .tools{grid-area:tools;display:flex;flex-direction:column;gap:4px;justify-content:center;align-items:center}
+.srow .tools a,.srow .tools button{font-size:16px;line-height:1;color:var(--accent);background:none;border:0;cursor:pointer;padding:4px;text-decoration:none}
+.srow .dev{grid-column:1/-1;font-size:12.5px;color:var(--warn);margin:-2px 0 0}
+.srow .meta{grid-column:1/-1;font-size:12.5px;color:var(--muted);margin:-2px 0 0;font-family:var(--mono)}
+.newcode{display:grid;gap:10px;padding:12px;border:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);border-radius:12px}
+.codes-inline{display:flex;gap:3px;flex-wrap:wrap;min-width:0}
+.day .code.more{--c:var(--muted)}
+.day .t.dev{color:var(--warn)}
+
+.toast{position:fixed;left:50%;bottom:calc(var(--tabs-h) + 20px + env(safe-area-inset-bottom,0px));z-index:60;transform:translate(-50%,16px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+  background:var(--panel-2);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);border-radius:12px;padding:10px 16px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 10px 40px #000a}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:520px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cal{gap:3px}
+  .day{min-height:58px;padding:5px 3px 7px;border-radius:8px}
+  .day .t{display:none}
+  .code{font-size:12.5px;padding:3px 4px}
+  .dow{font-size:10px;letter-spacing:.06em}
+  .rv{grid-template-columns:52px minmax(0,1fr) minmax(0,1fr);grid-template-areas:"dd sel sel" "dd s e"}
+  .rv .dd{grid-area:dd}.rv select{grid-area:sel}.rv .s{grid-area:s}.rv .e{grid-area:e}
+  .two{grid-template-columns:1fr}
+  .two.keep{grid-template-columns:1fr 1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  .ecg .trace{animation:none;stroke-dasharray:none}
+  .chip.live i,.view.on,.sheet-box{animation:none}
+  .thumb.scanning::after{animation-duration:4s}
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 13h5l2-5 3 10 2.5-7 1.5 2H22" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span><b>SCHICHTPULS</b><small>Pflege</small></span>
+    </div>
+    <span class="chip" id="syncChip"><i></i><span>Verbinde</span></span>
+  </header>
+  <svg class="ecg" viewBox="0 0 400 46" preserveAspectRatio="none" aria-hidden="true">
+    <path class="base" d="M0 30H400"/>
+    <path class="trace" d="M0 30H60l8-4 6 4h20l6-22 8 36 6-14h10l10-6 10 6h60l8-4 6 4h20l6-22 8 36 6-14h10l10-6 10 6h62"/>
+  </svg>
+
+  <!-- PLAN -->
+  <section class="view on" id="view-plan" aria-label="Plan">
+    <div class="monthbar">
+      <button class="btn sq ghost" id="prevM" aria-label="Vorheriger Monat">‹</button>
+      <h2 id="monthTitle">&nbsp;</h2>
+      <button class="btn sq ghost" id="nextM" aria-label="Nächster Monat">›</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="panel hud">
+      <div class="cal" id="cal"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="row between" style="margin-top:12px">
+      <button class="btn ghost" id="todayBtn">Heute</button>
+      <button class="btn" id="toScan"><svg viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3M7 12h10"/></svg>Plan scannen</button>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <p class="eyebrow">Nächste Dienste</p>
+      <ul class="list" id="upcoming"></ul>
+    </div>
+  </section>
+
+  <!-- SCAN -->
+  <section class="view" id="view-scan" aria-label="Scannen">
+    <p class="eyebrow">Scanner</p>
+    <h2>Dienstplan fotografieren</h2>
+    <p class="sub">Foto vom Stationsplan, Monat wählen, erkennen lassen. Danach prüfst du jeden Tag und übernimmst ihn in deinen Plan.</p>
+    <div class="stack">
+      <div class="panel hud stack">
+        <div class="two keep">
+          <label class="f"><span>Monat</span><select id="scanMonth"></select></label>
+          <label class="f"><span>Jahr</span><input type="number" id="scanYear" min="2000" max="2100" inputmode="numeric"></label>
+        </div>
+        <label class="f"><span>Dein Name auf dem Plan</span><input type="text" id="scanName" placeholder="z. B. Weber, M." autocomplete="off"></label>
+        <div class="drop" id="drop">
+          <p>Wähle ein Foto aus deiner Galerie oder mach ein neues. Der Plan sollte gerade von vorne und ganz im Bild sein. Bis zu 4 Fotos gehen auch.</p>
+          <div class="row" style="justify-content:center">
+            <label class="btn primary" id="pickBtn" for="fileInput" role="button" tabindex="0"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg>Aus meinen Fotos</label>
+            <label class="btn" id="camBtn" for="camInput" role="button" tabindex="0"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg>Neues Foto</label>
+          </div>
+          <input type="file" id="fileInput" class="vh" accept="image/*" multiple>
+          <input type="file" id="camInput" class="vh" accept="image/*" capture="environment">
+          <div class="thumbs" id="thumbs"></div>
+        </div>
+        <p class="hint" id="scanHint"></p>
+        <div class="row between">
+          <div class="status" id="scanStatus" role="status"></div>
+          <div class="row">
+            <button class="btn ghost" id="stopBtn" hidden>Stopp</button>
+            <button class="btn primary" id="recognizeBtn" disabled>Erkennen</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel stack" id="reviewPanel" hidden>
+        <div class="row between">
+          <div><p class="eyebrow">Prüfen</p><h3 style="margin:2px 0 0;font-size:22px" id="reviewTitle"></h3></div>
+          <span class="chip" id="reviewCount"></span>
+        </div>
+        <div class="notice" id="reviewNotes" hidden></div>
+        <p class="hint">Gelb markierte Tage waren auf dem Foto schwer zu lesen. Bitte kurz mit dem Aushang vergleichen.</p>
+        <div class="review" id="review"></div>
+        <label class="check"><input type="checkbox" id="keepManual" checked>Von Hand geänderte Tage behalten</label>
+        <div class="row end">
+          <button class="btn ghost" id="discardBtn">Verwerfen</button>
+          <button class="btn primary" id="applyBtn">Übernehmen</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CODES -->
+  <section class="view" id="view-codes" aria-label="Dienste">
+    <p class="eyebrow">Dienstarten</p>
+    <h2>Deine Kürzel</h2>
+    <p class="sub">So, wie sie auf deinem Stationsplan stehen. Das sind deine Standardzeiten. An einzelnen Tagen kannst du beim Eintragen davon abweichen und auch mehrere Schichten an einem Tag eintragen. Stunden werden netto gerechnet, also Dienstzeit minus Pause, Nachtdienste über Mitternacht inklusive.</p>
+    <div class="panel hud stack">
+      <div class="codes" id="codes"></div>
+      <div class="row between">
+        <button class="btn ghost" id="addCode">+ Dienstart</button>
+        <button class="btn primary" id="saveCodes">Speichern</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view" id="view-more" aria-label="Mehr">
+    <p class="eyebrow">Mehr</p>
+    <h2>Einstellungen</h2>
+    <div class="stack">
+      <div class="panel hud stack">
+        <label class="f"><span>Dein Name auf dem Plan</span><input type="text" id="setName" placeholder="z. B. Weber, M." autocomplete="off"></label>
+        <p class="hint">Genau so, wie er in der Namensspalte des Plans steht. Die Erkennung sucht danach.</p>
+        <div class="row end"><button class="btn primary" id="saveName">Speichern</button></div>
+      </div>
+      <div class="panel hud stack" id="keyPanel" hidden>
+        <p class="eyebrow">Foto-Erkennung</p>
+        <label class="f"><span>Anthropic API-Schlüssel</span>
+          <span class="row" style="flex-wrap:nowrap"><input type="password" id="setKey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"><button class="btn sq ghost" id="showKey" type="button" aria-label="Schlüssel zeigen">👁</button></span>
+        </label>
+        <p class="hint">Den Schlüssel bekommst du unter <a class="link" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Er bleibt nur auf diesem Handy und geht direkt an Anthropic. Ein Scan kostet wenige Cent. Leg dort am besten ein kleines Ausgabenlimit fest.</p>
+        <div class="row end"><button class="btn primary" id="saveKey">Speichern</button></div>
+      </div>
+      <div class="panel stack">
+        <p class="eyebrow">Kalender &amp; Sicherung</p>
+        <div class="row">
+          <button class="btn" id="csvBtn">Für Google Kalender (.csv)</button>
+          <button class="btn" id="backupBtn">Sicherung speichern</button>
+          <button class="btn ghost" id="restoreBtn">Sicherung laden</button>
+          <input type="file" id="restoreInput" accept="application/json,.json" hidden>
+        </div>
+        <p class="hint" id="exportHint">Die CSV-Datei importierst du am Computer in Google Kalender unter Einstellungen → Importieren. Einzelne Dienste kannst du auch direkt aus einem Tag heraus in Google Kalender eintragen.</p>
+        <div class="row" id="restoreConfirm" hidden>
+          <span class="hint" style="flex:1;min-width:0">Sicherung laden und deinen aktuellen Plan ersetzen?</span>
+          <button class="btn ghost" id="restoreNo">Abbrechen</button>
+          <button class="btn primary" id="restoreYes">Ersetzen</button>
+        </div>
+      </div>
+      <div class="panel stack">
+        <p class="eyebrow">Daten</p>
+        <p class="hint" id="storageHint"></p>
+        <div class="row">
+          <button class="btn danger" id="wipeBtn">Alle Daten löschen</button>
+          <button class="btn ghost" id="wipeNo" hidden>Abbrechen</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs" aria-label="Bereiche">
+  <div class="in">
+    <button class="tab on" data-view="plan"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Plan</button>
+    <button class="tab" data-view="scan"><svg viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3M7 12h10"/></svg>Scan</button>
+    <button class="tab" data-view="codes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>Dienste</button>
+    <button class="tab" data-view="more"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Mehr</button>
+  </div>
+</nav>
+
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-box">
+    <div class="grab"></div>
+    <div class="row between">
+      <div><p class="eyebrow" id="sheetDow"></p><h3 style="margin:2px 0 0;font-size:22px" id="sheetTitle"></h3></div>
+      <button class="btn sq ghost" id="sheetClose" aria-label="Schließen">✕</button>
+    </div>
+    <p class="sec-lbl">Schnellwahl</p>
+    <div class="pick" id="pick"></div>
+    <p class="sec-lbl">Schichten an diesem Tag</p>
+    <div class="srows" id="shiftRows"></div>
+    <div class="row">
+      <button class="btn ghost" id="addShift" type="button">+ Weitere Schicht</button>
+      <button class="btn ghost" id="newCodeBtn" type="button">+ Neue Dienstart</button>
+    </div>
+    <div class="newcode" id="newCodeBox" hidden>
+      <div class="two keep">
+        <label class="f"><span>Kürzel</span><input type="text" id="ncCode" maxlength="6" placeholder="z. B. B"></label>
+        <label class="f"><span>Bezeichnung</span><input type="text" id="ncLabel" placeholder="z. B. Bereitschaft"></label>
+      </div>
+      <div class="two keep">
+        <label class="f"><span>Beginn</span><input type="time" id="ncStart"></label>
+        <label class="f"><span>Ende</span><input type="time" id="ncEnd"></label>
+      </div>
+      <div class="two keep">
+        <label class="f"><span>Pause min</span><input type="number" id="ncPause" min="0" max="240" step="5" value="30" inputmode="numeric"></label>
+        <label class="f"><span>Art</span><select id="ncKind"><option value="work">Dienst</option><option value="free">Frei</option><option value="absent">Abwesend</option></select></label>
+      </div>
+      <div class="row end"><button class="btn ghost" id="ncCancel" type="button">Abbrechen</button><button class="btn primary" id="ncSave" type="button">Anlegen</button></div>
+    </div>
+    <label class="f"><span>Notiz</span><textarea id="edNote" placeholder="z. B. Tausch mit Anna, Station 4B, Einspringer"></textarea></label>
+    <div class="row between">
+      <button class="btn danger" id="edClear">Löschen</button>
+      <button class="btn primary" id="edSave">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+const MONTHS = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const DOW = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+const DOW_LONG = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+// Typical German ward shifts; every value is editable under "Dienste".
+const DEFAULT_CODES = [
+  {code:'F',  label:'Frühdienst',       start:'06:00', end:'14:12', pause:30, color:'#ffc65c', kind:'work'},
+  {code:'S',  label:'Spätdienst',       start:'13:30', end:'21:42', pause:30, color:'#ff8f5e', kind:'work'},
+  {code:'N',  label:'Nachtdienst',      start:'21:15', end:'06:30', pause:45, color:'#9aa8ff', kind:'work'},
+  {code:'Z',  label:'Zwischendienst',   start:'09:00', end:'17:12', pause:30, color:'#3ee6c8', kind:'work'},
+  {code:'FB', label:'Fortbildung',      start:'08:00', end:'16:00', pause:30, color:'#d38cff', kind:'work'},
+  {code:'X',  label:'Frei',             start:'',      end:'',      pause:0,  color:'#6f8a93', kind:'free'},
+  {code:'U',  label:'Urlaub',           start:'',      end:'',      pause:0,  color:'#55e39b', kind:'absent'},
+  {code:'K',  label:'Krank',            start:'',      end:'',      pause:0,  color:'#ff6b5e', kind:'absent'},
+];
+const LOCAL_KEY = 'schichtpuls.v1';
+// Inside the Android app the page runs without claude.ai: data stays on the phone,
+// recognition calls the Anthropic API with the user's own key, files go through the app bridge.
+const APP = window.SchichtpulsApp || null;
+const KEY_STORE = 'schichtpuls.apikey';
+const SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.127.0/+esm';
+const getKey = () => { try { return localStorage.getItem(KEY_STORE) || ''; } catch { return ''; } };
+
+/* ---------- state ---------- */
+const state = {name:'', codes: DEFAULT_CODES.map(c => ({...c})), months:{}};
+const now = new Date();
+let vy = now.getFullYear(), vm = now.getMonth();
+let photos = [];            // {id, file, url}
+let scan = null;            // {year, month, entries, notes}
+let edKey = null;
+let ctl = null;
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2,'0');
+const ymOf = (y,m) => `${y}-${pad(m+1)}`;
+const keyOf = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
+const daysIn = (y,m) => new Date(y,m+1,0).getDate();
+const dowIdx = (y,m,d) => (new Date(y,m,d).getDay()+6)%7;
+const isTime = t => /^\d{2}:\d{2}$/.test(t||'');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const codeDef = c => state.codes.find(x => x.code.toLowerCase() === String(c||'').toLowerCase());
+const colorOf = c => codeDef(c)?.color || '#9fb3ba';
+const toMin = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+const fmtH = h => (Math.round(h*100)/100).toLocaleString('de-DE',{maximumFractionDigits:2});
+function toast(msg, ms=2600){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove('show'),ms); }
+
+function entryAt(k){ const [y,m,d] = k.split('-'); return state.months[`${y}-${m}`]?.[d] || null; }
+// A day holds one or more shifts: {shifts:[{code, start?, end?}], note?, src?}.
+// start/end are only stored when they differ from the shift type's default. Older entries were {code, start, end}.
+function shiftsOf(e){
+  if (!e) return [];
+  if (Array.isArray(e.shifts)) return e.shifts.filter(x => x && x.code);
+  return e.code ? [{code:e.code, start:e.start, end:e.end}] : [];
+}
+function timesOf(x){ const def = codeDef(x.code) || {}; return {start: x.start || def.start || '', end: x.end || def.end || ''}; }
+function hoursOfShift(x){
+  const def = codeDef(x.code);
+  if (!def || def.kind !== 'work') return 0;
+  const {start,end} = timesOf(x);
+  if (!isTime(start) || !isTime(end)) return 0;
+  let d = toMin(end) - toMin(start); if (d <= 0) d += 1440;
+  return Math.max(0, d - (Number(def.pause) || 0)) / 60;
+}
+const hoursOf = e => shiftsOf(e).reduce((a,x) => a + hoursOfShift(x), 0);
+const isNight = x => { const {start,end} = timesOf(x); return isTime(start) && isTime(end) && toMin(end) <= toMin(start); };
+const isDeviating = x => { const def = codeDef(x.code); return !!def && ((x.start && x.start !== def.start) || (x.end && x.end !== def.end)); };
+function compactShift(code, start, end){ // keep only times that differ from the default
+  const def = codeDef(code), x = {code};
+  if (start && start !== (def?.start || '')) x.start = start;
+  if (end && end !== (def?.end || '')) x.end = end;
+  return x;
+}
+
+/* ---------- storage: private per-viewer db, else this browser ---------- */
+const store = {
+  mode:'pending', col:null, chains:{},
+  async init(){
+    let db = null, user = null;
+    if (!APP) try { [db, user] = await Promise.all([window.claude?.use?.('db'), window.claude?.use?.('user')]); } catch {}
+    const uid = user ? await user.id().catch(() => null) : null;
+    if (db && uid){
+      this.mode = 'cloud';
+      this.col = db.collection('data/users/' + uid);
+      this.col.onSnapshot(snap => {
+        for (const doc of snap.docs){
+          const data = doc.data() || {};
+          if (doc.id === 'settings'){
+            if (typeof data.name === 'string') state.name = data.name;
+            if (Array.isArray(data.codes) && data.codes.length) state.codes = data.codes;
+          } else if (doc.id.startsWith('m-')) state.months[doc.id.slice(2)] = data.days || {};
+        }
+        for (const ch of snap.docChanges()) if (ch.type === 'removed' && ch.doc.id.startsWith('m-')) delete state.months[ch.doc.id.slice(2)];
+        renderAll();
+      }, () => { this.fallback(); });
+    } else this.fallback();
+    syncChip();
+  },
+  fallback(){
+    this.mode = 'local'; this.col = null;
+    try { const s = JSON.parse(localStorage.getItem(LOCAL_KEY)); if (s){ state.name = s.name || ''; if (s.codes?.length) state.codes = s.codes; state.months = s.months || {}; } } catch {}
+    syncChip(); renderAll();
+  },
+  writeLocal(){ try { localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); } catch {} },
+  queue(id, fn){ // one write at a time per document
+    const next = (this.chains[id] || Promise.resolve()).then(fn).catch(e => { console.error(e); toast(e?.code === 'quota_exceeded' ? 'Speicher voll. Lösche alte Monate.' : 'Speichern fehlgeschlagen. Bitte erneut versuchen.'); });
+    this.chains[id] = next; return next;
+  },
+  saveMonth(ym){
+    if (this.mode !== 'cloud') return this.writeLocal();
+    const days = state.months[ym] || {};
+    const ref = this.col.doc('m-' + ym);
+    return this.queue('m-'+ym, () => Object.keys(days).length ? ref.set({days}) : ref.delete());
+  },
+  saveSettings(){
+    if (this.mode !== 'cloud') return this.writeLocal();
+    return this.queue('settings', () => this.col.doc('settings').set({name: state.name, codes: state.codes}));
+  },
+  async wipe(){
+    if (this.mode === 'cloud'){
+      for (const ym of Object.keys(state.months)) await this.queue('m-'+ym, () => this.col.doc('m-'+ym).delete());
+      await this.queue('settings', () => this.col.doc('settings').delete());
+    }
+    try { localStorage.removeItem(LOCAL_KEY); } catch {}
+  },
+};
+function syncChip(){
+  const c = $('#syncChip'), t = c.querySelector('span');
+  c.className = 'chip' + (store.mode === 'cloud' ? ' live' : store.mode === 'local' ? ' local' : '');
+  t.textContent = store.mode === 'cloud' ? 'Synchron' : store.mode === 'local' ? (APP ? 'Auf dem Handy' : 'Nur dieses Gerät') : 'Verbinde';
+  if (APP && store.mode === 'local') c.className = 'chip live';
+  $('#storageHint').textContent = store.mode === 'cloud'
+    ? 'Dein Plan ist privat in deinem Claude-Konto gespeichert und auf allen deinen Geräten gleich. Niemand sonst kann ihn sehen.'
+    : APP ? 'Dein Plan ist nur auf diesem Handy gespeichert. Speichere ab und zu eine Sicherung, z. B. vor einem Handywechsel.'
+    : 'Dein Plan wird nur in diesem Browser gespeichert. Öffne die App angemeldet in Claude, damit er geräteübergreifend gesichert wird.';
+}
+function setEntry(k, e){
+  const [y,m,d] = k.split('-'), ym = `${y}-${m}`;
+  const mon = {...(state.months[ym] || {})};
+  if (e) mon[d] = e; else delete mon[d];
+  state.months[ym] = mon;
+}
+
+/* ---------- navigation ---------- */
+function show(v){
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'view-'+v));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === v));
+  if (v === 'codes') renderCodes();
+  if (v === 'scan') renderScanForm();
+  if (v === 'more') $('#setName').value = state.name;
+  scrollTo({top:0});
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.view)));
+$('#toScan').addEventListener('click', () => show('scan'));
+
+function renderAll(){
+  renderPlan();
+  if ($('#view-codes').classList.contains('on') && !document.activeElement?.closest?.('#codes')) renderCodes();
+  if (!$('#scanName').value) $('#scanName').value = state.name;
+}
+
+/* ---------- plan ---------- */
+function renderPlan(){
+  $('#monthTitle').innerHTML = `${MONTHS[vm]}<small>${vy}</small>`;
+  const n = daysIn(vy,vm), first = dowIdx(vy,vm,1);
+  const todayKey = keyOf(now.getFullYear(), now.getMonth(), now.getDate());
+  let html = DOW.map((d,i) => `<div class="dow${i>4?' we':''}">${d}</div>`).join('');
+  for (let i=0;i<first;i++) html += '<div class="day pad" aria-hidden="true"></div>';
+  let hours=0, shifts=0, nights=0, off=0;
+  const used = new Set();
+  for (let d=1; d<=n; d++){
+    const k = keyOf(vy,vm,d), e = entryAt(k), wi = dowIdx(vy,vm,d), list = shiftsOf(e);
+    let inner = `<span class="n">${pad(d)}</span>`, style = '';
+    if (list.length){
+      list.forEach(x => used.add(x.code));
+      style = ` style="--c:${colorOf(list[0].code)}"`;
+      inner += `<span class="codes-inline">${list.slice(0,2).map(x => `<span class="code" style="--c:${colorOf(x.code)}">${esc(x.code)}</span>`).join('')}${list.length > 2 ? `<span class="code more">+${list.length-2}</span>` : ''}</span>`;
+      const w = list.find(x => codeDef(x.code)?.kind === 'work');
+      if (w){ const {start,end} = timesOf(w); if (isTime(start)) inner += `<span class="t${isDeviating(w) ? ' dev' : ''}">${start}–${end}</span>`; }
+      else inner += `<span class="t">${esc(codeDef(list[0].code)?.label || '')}</span>`;
+      hours += hoursOf(e);
+      const work = list.filter(x => codeDef(x.code)?.kind === 'work');
+      shifts += work.length; nights += work.filter(isNight).length;
+      if (!work.length && list.some(x => codeDef(x.code))) off++;
+    }
+    if (e?.note) inner += '<i class="dot" title="Notiz"></i>';
+    const aria = list.map(x => codeDef(x.code)?.label || x.code).join(' und ');
+    html += `<button class="day${wi>4?' we':''}${k===todayKey?' today':''}" data-k="${k}"${style} aria-label="${d}. ${MONTHS[vm]}${aria ? ', '+esc(aria) : ''}">${inner}</button>`;
+  }
+  $('#cal').innerHTML = html;
+  $('#stats').innerHTML = `
+    <div class="stat h"><b>${fmtH(hours)}</b><small>Std. netto</small></div>
+    <div class="stat"><b>${shifts}</b><small>Dienste</small></div>
+    <div class="stat n"><b>${nights}</b><small>Nächte</small></div>
+    <div class="stat"><b>${off}</b><small>Frei · Urlaub</small></div>`;
+  $('#legend').innerHTML = state.codes.filter(c => used.has(c.code)).map(c => `<span style="--c:${c.color}"><i></i>${esc(c.code)} ${esc(c.label)}</span>`).join('');
+  renderUpcoming();
+}
+$('#cal').addEventListener('click', e => { const b = e.target.closest('.day[data-k]'); if (b) openEditor(b.dataset.k); });
+
+function renderUpcoming(){
+  const today = keyOf(now.getFullYear(), now.getMonth(), now.getDate());
+  const items = [];
+  for (const [ym, days] of Object.entries(state.months)) for (const [d,e] of Object.entries(days)){
+    const k = `${ym}-${d}`; if (k < today) continue;
+    shiftsOf(e).forEach((x,i) => items.push({k, x, i, note: i === 0 ? e.note : ''}));
+  }
+  items.sort((a,b) => a.k === b.k ? a.i - b.i : a.k < b.k ? -1 : 1);
+  const next = items.slice(0,6);
+  if (!next.length){
+    $('#upcoming').innerHTML = `<li class="empty" style="display:grid"><b>${store.mode === 'pending' ? 'Lade deinen Plan …' : 'Noch keine Dienste eingetragen'}</b>${store.mode === 'pending' ? '' : 'Fotografiere deinen Stationsplan unter „Scan“ oder tippe auf einen Tag im Kalender.'}</li>`;
+    return;
+  }
+  $('#upcoming').innerHTML = next.map(({k, x, note}) => {
+    const [y,m,d] = k.split('-').map(Number), def = codeDef(x.code), {start,end} = timesOf(x);
+    const time = def?.kind === 'work' && isTime(start) ? `${start} – ${end}` : '';
+    return `<li><span class="d">${pad(d)}.${pad(m)}.<small>${k===today ? 'HEUTE' : DOW[dowIdx(y,m-1,d)].toUpperCase()}</small></span>
+      <span class="code" style="--c:${colorOf(x.code)}">${esc(x.code)}</span>
+      <span class="l">${esc(def?.label || 'Unbekannt')}${time ? ' · <span class="tm">'+time+'</span>' : ''}${isDeviating(x) ? '<small>abweichende Zeit</small>' : ''}${note ? `<small>${esc(note)}</small>` : ''}</span></li>`;
+  }).join('');
+}
+$('#prevM').addEventListener('click', () => { if (--vm < 0){ vm=11; vy--; } renderPlan(); });
+$('#nextM').addEventListener('click', () => { if (++vm > 11){ vm=0; vy++; } renderPlan(); });
+$('#todayBtn').addEventListener('click', () => { vy=now.getFullYear(); vm=now.getMonth(); renderPlan(); });
+(() => { // swipe months
+  let x0=null, y0=null; const el=$('#cal');
+  el.addEventListener('touchstart', e => { x0=e.touches[0].clientX; y0=e.touches[0].clientY; }, {passive:true});
+  el.addEventListener('touchend', e => { if (x0===null) return; const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0; x0=null;
+    if (Math.abs(dx)>60 && Math.abs(dx)>Math.abs(dy)*1.5) (dx<0?$('#nextM'):$('#prevM')).click(); });
+})();
+
+/* ---------- day editor ---------- */
+let edShifts = [], edActive = 0;
+function openEditor(k){
+  edKey = k; const [y,m,d] = k.split('-').map(Number), e = entryAt(k) || {};
+  edShifts = shiftsOf(e).map(x => ({code: x.code, ...timesOf(x)}));
+  edActive = 0;
+  $('#sheetDow').textContent = DOW_LONG[dowIdx(y,m-1,d)];
+  $('#sheetTitle').textContent = `${d}. ${MONTHS[m-1]} ${y}`;
+  $('#edNote').value = e.note || '';
+  $('#newCodeBox').hidden = true;
+  renderPick(); renderShiftRows();
+  $('#sheet').hidden = false;
+}
+function renderPick(){
+  const cur = edShifts[edActive]?.code;
+  $('#pick').innerHTML = state.codes.map(c => `<button type="button" data-c="${esc(c.code)}" class="${c.code===cur?'on':''}" style="--c:${c.color}">${esc(c.code)}<small>${esc(c.label)}</small></button>`).join('');
+}
+function shiftMeta(x){
+  const def = codeDef(x.code); if (!def || def.kind !== 'work' || !isTime(x.start) || !isTime(x.end)) return '';
+  return `${fmtH(hoursOfShift(x))} Std. netto${def.pause ? ` (${def.pause} min Pause)` : ''}${isNight(x) ? ' · über Nacht' : ''}`;
+}
+function renderShiftRows(){
+  if (!edShifts.length){ $('#shiftRows').innerHTML = '<p class="hint">Noch keine Schicht. Tippe oben auf eine Dienstart oder auf „+ Weitere Schicht“.</p>'; return; }
+  $('#shiftRows').innerHTML = edShifts.map((x,i) => {
+    const def = codeDef(x.code), g = x.code && def?.kind !== 'free' ? gcalUrl(edKey, x, $('#edNote').value.trim()) : '';
+    const opts = '<option value="">Dienstart wählen</option>' + state.codes.map(c => `<option value="${esc(c.code)}"${c.code===x.code?' selected':''}>${esc(c.code)} · ${esc(c.label)}</option>`).join('');
+    return `<div class="srow${i===edActive && edShifts.length>1 ? ' active' : ''}" data-i="${i}" style="--c:${colorOf(x.code)}">
+      <select id="sr-c-${i}" aria-label="Dienstart Schicht ${i+1}">${opts}</select>
+      <input type="time" class="s" id="sr-s-${i}" value="${esc(x.start)}" aria-label="Beginn Schicht ${i+1}">
+      <input type="time" class="e" id="sr-e-${i}" value="${esc(x.end)}" aria-label="Ende Schicht ${i+1}">
+      <button class="rm" type="button" aria-label="Schicht ${i+1} entfernen">✕</button>
+      <span class="tools">${isDeviating(x) ? `<button type="button" class="reset" title="Standardzeit" aria-label="Standardzeit wiederherstellen">↺</button>` : ''}${g ? `<a href="${esc(g)}" target="_blank" rel="noopener" title="In Google Kalender eintragen" aria-label="In Google Kalender eintragen">↗</a>` : ''}</span>
+      ${isDeviating(x) ? `<p class="dev">Abweichend vom Standard ${esc(def.start)}–${esc(def.end)}</p>` : ''}
+      ${shiftMeta(x) ? `<p class="meta">${shiftMeta(x)}</p>` : ''}
+    </div>`;
+  }).join('');
+}
+function setShiftCode(i, code){
+  const def = codeDef(code);
+  edShifts[i] = {code, start: def?.start || '', end: def?.end || ''};
+}
+$('#pick').addEventListener('click', e => {
+  const b = e.target.closest('button[data-c]'); if (!b) return;
+  if (!edShifts.length){ edShifts.push({}); edActive = 0; }
+  setShiftCode(edActive, b.dataset.c);
+  renderPick(); renderShiftRows();
+});
+$('#shiftRows').addEventListener('focusin', e => {
+  const row = e.target.closest('.srow'); if (!row) return;
+  const i = +row.dataset.i; if (i !== edActive){ edActive = i; renderPick(); document.querySelectorAll('#shiftRows .srow').forEach(r => r.classList.toggle('active', +r.dataset.i === i && edShifts.length > 1)); }
+});
+$('#shiftRows').addEventListener('change', e => {
+  const row = e.target.closest('.srow'); if (!row) return; const i = +row.dataset.i;
+  if (e.target.tagName === 'SELECT') setShiftCode(i, e.target.value);
+  else if (e.target.classList.contains('s')) edShifts[i].start = e.target.value;
+  else if (e.target.classList.contains('e')) edShifts[i].end = e.target.value;
+  edActive = i; renderPick(); renderShiftRows();
+});
+$('#shiftRows').addEventListener('click', e => {
+  const row = e.target.closest('.srow'); if (!row) return; const i = +row.dataset.i;
+  if (e.target.closest('.rm')){ edShifts.splice(i,1); edActive = Math.max(0, Math.min(edActive, edShifts.length-1)); renderPick(); renderShiftRows(); }
+  else if (e.target.closest('.reset')){ setShiftCode(i, edShifts[i].code); renderShiftRows(); }
+});
+$('#addShift').addEventListener('click', () => { edShifts.push({code:'', start:'', end:''}); edActive = edShifts.length-1; renderPick(); renderShiftRows(); $(`#sr-c-${edActive}`)?.focus(); });
+$('#edNote').addEventListener('change', renderShiftRows);
+
+/* create a new shift type right from the day editor */
+$('#newCodeBtn').addEventListener('click', () => { const b = $('#newCodeBox'); b.hidden = !b.hidden; if (!b.hidden){ ['#ncCode','#ncLabel','#ncStart','#ncEnd'].forEach(s => $(s).value=''); $('#ncPause').value = 30; $('#ncKind').value = 'work'; $('#ncCode').focus(); } });
+$('#ncCancel').addEventListener('click', () => { $('#newCodeBox').hidden = true; });
+$('#ncSave').addEventListener('click', () => {
+  const code = $('#ncCode').value.trim(), label = $('#ncLabel').value.trim() || code;
+  if (!code){ toast('Bitte ein Kürzel eintragen.'); $('#ncCode').focus(); return; }
+  if (codeDef(code)){ toast(`Das Kürzel „${code}“ gibt es schon.`); return; }
+  const palette = ['#7fd1ff','#f0a3ff','#ffd27f','#8ef0b8','#ff9fb2','#b7a3ff'];
+  state.codes.push({code, label, start:$('#ncStart').value, end:$('#ncEnd').value, pause: Math.max(0, Number($('#ncPause').value)||0), color: palette[state.codes.length % palette.length], kind: $('#ncKind').value});
+  store.saveSettings();
+  edShifts.push({}); edActive = edShifts.length-1; setShiftCode(edActive, code);
+  $('#newCodeBox').hidden = true; renderPick(); renderShiftRows();
+  toast(`Dienstart „${label}“ angelegt`);
+});
+
+function gcalUrl(k, x, note){
+  const def = codeDef(x.code); if (!def) return '';
+  const {start,end} = timesOf(x), ymd = k.replace(/-/g,''), [y,m,d] = k.split('-').map(Number);
+  let dates;
+  if (def.kind === 'work' && isTime(start) && isTime(end)){
+    const ed = toMin(end) <= toMin(start) ? new Date(y,m-1,d+1) : new Date(y,m-1,d);
+    dates = `${ymd}T${start.replace(':','')}00/${ed.getFullYear()}${pad(ed.getMonth()+1)}${pad(ed.getDate())}T${end.replace(':','')}00`;
+  } else {
+    const nx = new Date(y,m-1,d+1);
+    dates = `${ymd}/${nx.getFullYear()}${pad(nx.getMonth()+1)}${pad(nx.getDate())}`;
+  }
+  const p = new URLSearchParams({action:'TEMPLATE', text:`${def.label} (${x.code})`, dates, ctz:'Europe/Berlin'});
+  if (note) p.set('details', note);
+  return 'https://calendar.google.com/calendar/render?' + p.toString();
+}
+function closeEditor(){ $('#sheet').hidden = true; edKey = null; }
+$('#sheetClose').addEventListener('click', closeEditor);
+$('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeEditor(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#sheet').hidden) closeEditor(); });
+$('#edSave').addEventListener('click', () => {
+  const note = $('#edNote').value.trim(), k = edKey;
+  const list = edShifts.filter(x => x.code).map(x => compactShift(x.code, x.start, x.end));
+  if (!list.length && !note) setEntry(k, null);
+  else { const e = {shifts: list, src:'manual'}; if (note) e.note = note; setEntry(k, e); }
+  store.saveMonth(k.slice(0,7)); closeEditor(); renderPlan(); toast('Gespeichert');
+});
+$('#edClear').addEventListener('click', () => { const k = edKey; setEntry(k, null); store.saveMonth(k.slice(0,7)); closeEditor(); renderPlan(); toast('Eintrag gelöscht'); });
+
+/* ---------- codes ---------- */
+function renderCodes(){
+  $('#codes').innerHTML = state.codes.map((c,i) => `
+    <div class="cd" data-i="${i}" style="--c:${esc(c.color)}">
+      <input type="color" class="c-col" id="cc-${i}" value="${esc(c.color)}" aria-label="Farbe">
+      <input type="text" class="c-key" id="ck-${i}" value="${esc(c.code)}" maxlength="6" aria-label="Kürzel">
+      <input type="text" class="c-label" id="cl-${i}" value="${esc(c.label)}" aria-label="Bezeichnung">
+      <button class="rm" type="button" aria-label="${esc(c.label || c.code)} entfernen">✕</button>
+      <div class="cd2">
+        <label><span class="lbl">Beginn</span><input type="time" class="c-s" id="cs-${i}" value="${esc(c.start)}"></label>
+        <label><span class="lbl">Ende</span><input type="time" class="c-e" id="ce-${i}" value="${esc(c.end)}"></label>
+        <label><span class="lbl">Pause min</span><input type="number" class="c-p" id="cp-${i}" min="0" max="240" step="5" inputmode="numeric" value="${Number(c.pause)||0}"></label>
+        <label><span class="lbl">Art</span><select class="c-kind" id="cn-${i}">
+          <option value="work"${c.kind==='work'?' selected':''}>Dienst</option>
+          <option value="free"${c.kind==='free'?' selected':''}>Frei</option>
+          <option value="absent"${c.kind==='absent'?' selected':''}>Abwesend</option></select></label>
+      </div>
+    </div>`).join('');
+}
+$('#codes').addEventListener('input', e => { if (e.target.matches('.c-col')) e.target.closest('.cd').style.setProperty('--c', e.target.value); });
+$('#codes').addEventListener('click', e => { if (!e.target.matches('.rm')) return; readCodes(); state.codes.splice(+e.target.closest('.cd').dataset.i, 1); renderCodes(); });
+function readCodes(){
+  state.codes = [...document.querySelectorAll('#codes .cd')].map(r => ({
+    code: r.querySelector('.c-key').value.trim(),
+    label: r.querySelector('.c-label').value.trim() || r.querySelector('.c-key').value.trim(),
+    start: r.querySelector('.c-s').value, end: r.querySelector('.c-e').value,
+    pause: Math.max(0, Number(r.querySelector('.c-p').value) || 0),
+    color: r.querySelector('.c-col').value, kind: r.querySelector('.c-kind').value,
+  })).filter(c => c.code);
+}
+$('#addCode').addEventListener('click', () => { readCodes(); state.codes.push({code:'',label:'',start:'',end:'',pause:30,color:'#7fd1ff',kind:'work'}); renderCodes(); const k = document.querySelectorAll('#codes .c-key'); k[k.length-1].focus(); });
+$('#saveCodes').addEventListener('click', () => {
+  readCodes();
+  const seen = new Set(), dup = state.codes.find(c => { const k=c.code.toLowerCase(); if (seen.has(k)) return true; seen.add(k); return false; });
+  if (dup){ toast(`Das Kürzel „${dup.code}“ gibt es doppelt.`); return; }
+  store.saveSettings(); renderCodes(); renderPlan(); toast('Dienstarten gespeichert');
+});
+
+/* ---------- settings ---------- */
+$('#saveName').addEventListener('click', () => { state.name = $('#setName').value.trim(); $('#scanName').value = state.name; store.saveSettings(); toast('Name gespeichert'); });
+if (APP){
+  $('#keyPanel').hidden = false; $('#setKey').value = getKey();
+  $('#showKey').addEventListener('click', () => { const i = $('#setKey'); i.type = i.type === 'password' ? 'text' : 'password'; });
+  $('#saveKey').addEventListener('click', () => {
+    try { localStorage.setItem(KEY_STORE, $('#setKey').value.trim()); } catch {}
+    updateScanAvailability(); toast($('#setKey').value.trim() ? 'Schlüssel gespeichert' : 'Schlüssel entfernt');
+  });
+}
+
+let downloads = null;
+(async () => {
+  if (APP){ $('#exportHint').textContent = 'Dateien landen im Download-Ordner deines Handys. Die CSV-Datei importierst du am Computer in Google Kalender unter Einstellungen → Importieren. Einzelne Dienste trägst du direkt aus einem Tag heraus ein.'; return; }
+  try { downloads = await window.claude?.use?.('downloads'); } catch {}
+  if (!downloads){ ['#csvBtn','#backupBtn'].forEach(s => $(s).disabled = true); $('#exportHint').textContent = 'Dateien speichern geht in dieser Ansicht nicht. Einzelne Dienste kannst du aber direkt aus einem Tag heraus in Google Kalender eintragen.'; }
+})();
+async function offer(filename, data){
+  if (APP){
+    const mime = filename.endsWith('.csv') ? 'text/csv' : 'application/json';
+    let res = ''; try { res = APP.saveFile(filename, mime, data); } catch {}
+    toast(res === 'ok' ? `Gespeichert unter Downloads: ${filename}` : res === 'shared' ? 'Wähle, wo die Datei hin soll.' : 'Die Datei konnte nicht gespeichert werden.', 3600);
+    return;
+  }
+  if (!downloads) return;
+  try { await downloads.save({filename, data}); toast('Datei gespeichert'); }
+  catch (e){ if (e?.code !== 'declined') toast(e?.code === 'rate_limited' ? 'Bitte kurz warten und erneut versuchen.' : 'Die Datei konnte nicht gespeichert werden.'); }
+}
+function usDate(y,m,d){ return `${pad(m)}/${pad(d)}/${y}`; }
+function usTime(t){ let [h,mi] = t.split(':').map(Number); const ap = h>=12 ? 'PM' : 'AM'; h = h%12 || 12; return `${h}:${pad(mi)} ${ap}`; }
+const csvCell = s => /[",\n]/.test(s) ? `"${String(s).replace(/"/g,'""')}"` : String(s);
+$('#csvBtn').addEventListener('click', () => {
+  const rows = [['Subject','Start Date','Start Time','End Date','End Time','All Day Event','Description','Private']];
+  for (const [ym, days] of Object.entries(state.months).sort()) for (const [dd, e] of Object.entries(days).sort()) for (const x of shiftsOf(e)){
+    const def = codeDef(x.code); if (!def || def.kind === 'free') continue;
+    const [y,m] = ym.split('-').map(Number), d = Number(dd), {start,end} = timesOf(x), title = `${def.label} (${x.code})`;
+    if (def.kind === 'work' && isTime(start) && isTime(end)){
+      const ed = toMin(end) <= toMin(start) ? new Date(y,m-1,d+1) : new Date(y,m-1,d);
+      rows.push([title, usDate(y,m,d), usTime(start), usDate(ed.getFullYear(), ed.getMonth()+1, ed.getDate()), usTime(end), 'False', e.note||'', 'True']);
+    } else rows.push([title, usDate(y,m,d), '', usDate(y,m,d), '', 'True', e.note||'', 'True']);
+  }
+  if (rows.length < 2){ toast('Noch keine Dienste zum Exportieren.'); return; }
+  offer('dienstplan-google-kalender.csv', rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n');
+});
+$('#backupBtn').addEventListener('click', () => offer(`schichtpuls-sicherung-${keyOf(now.getFullYear(),now.getMonth(),now.getDate())}.json`, JSON.stringify({app:'schichtpuls', version:1, ...state}, null, 2)));
+let pendingRestore = null;
+$('#restoreBtn').addEventListener('click', () => $('#restoreInput').click());
+$('#restoreInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!d || typeof d.months !== 'object' || !Array.isArray(d.codes)) throw 0;
+    pendingRestore = d; $('#restoreConfirm').hidden = false;
+  } catch { toast('Diese Datei ist keine Schichtpuls-Sicherung.'); }
+});
+$('#restoreNo').addEventListener('click', () => { pendingRestore = null; $('#restoreConfirm').hidden = true; });
+$('#restoreYes').addEventListener('click', async () => {
+  const d = pendingRestore; if (!d) return;
+  $('#restoreConfirm').hidden = true; pendingRestore = null;
+  const old = Object.keys(state.months);
+  state.name = d.name || ''; state.codes = d.codes; state.months = d.months;
+  store.saveSettings();
+  for (const ym of new Set([...old, ...Object.keys(d.months)])) store.saveMonth(ym);
+  $('#setName').value = state.name; renderPlan(); toast('Sicherung geladen');
+});
+let wipeArmed = false;
+$('#wipeBtn').addEventListener('click', async () => {
+  if (!wipeArmed){ wipeArmed = true; $('#wipeBtn').textContent = 'Ja, endgültig löschen'; $('#wipeNo').hidden = false; return; }
+  wipeArmed = false; $('#wipeNo').hidden = true; $('#wipeBtn').textContent = 'Alle Daten löschen';
+  await store.wipe();
+  state.name = ''; state.codes = DEFAULT_CODES.map(c => ({...c})); state.months = {};
+  $('#setName').value = ''; renderPlan(); toast('Alle Daten gelöscht');
+});
+$('#wipeNo').addEventListener('click', () => { wipeArmed = false; $('#wipeNo').hidden = true; $('#wipeBtn').textContent = 'Alle Daten löschen'; });
+
+/* ---------- scan ---------- */
+let sample, imgLimits = null; // undefined = still checking
+(async () => {
+  if (APP){ sample = null; imgLimits = {maxCount: 20}; updateScanAvailability(); return; }
+  try { sample = (await window.claude?.use?.('sample')) || null; } catch { sample = null; }
+  if (sample) imgLimits = (await sample.limits().catch(() => null))?.images || null;
+  updateScanAvailability();
+})();
+function updateScanAvailability(){
+  // Picking photos always works; only the recognition step depends on Claude being reachable.
+  if (APP){
+    $('#scanHint').textContent = getKey() ? 'Die Erkennung schickt die Fotos verschlüsselt an Claude und dauert etwa eine Minute.' : 'Für die Foto-Erkennung trägst du einmal deinen API-Schlüssel unter „Mehr“ ein. Fotos auswählen und Dienste von Hand eintragen geht auch ohne.';
+    renderThumbs(); return;
+  }
+  const ok = !!(sample && imgLimits);
+  $('#scanHint').textContent = ok
+    ? 'Die Erkennung läuft über dein Claude-Konto. Du brauchst keinen API-Schlüssel. Beim ersten Mal fragt Claude, ob die App Bilder senden darf.'
+    : sample === undefined ? ''
+    : 'Die Erkennung braucht Claude und ist in dieser Ansicht gerade nicht verfügbar. Öffne den Link angemeldet in Chrome. Fotos auswählen und Dienste von Hand eintragen geht trotzdem.';
+  renderThumbs();
+}
+function renderScanForm(){
+  const sel = $('#scanMonth');
+  if (!sel.options.length){
+    sel.innerHTML = MONTHS.map((m,i) => `<option value="${i}">${m}</option>`).join('');
+    const nx = new Date(now.getFullYear(), now.getMonth()+1, 1); // rosters usually come out for next month
+    sel.value = String(nx.getMonth()); $('#scanYear').value = nx.getFullYear();
+  }
+  if (!$('#scanName').value) $('#scanName').value = state.name;
+}
+['#pickBtn','#camBtn'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); $('#' + e.currentTarget.htmlFor).click(); } }));
+$('#fileInput').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+addEventListener('paste', e => {
+  if (!$('#view-scan').classList.contains('on')) return;
+  const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
+  if (files.length){ e.preventDefault(); addFiles(files); }
+});
+$('#camInput').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+(() => { const d = $('#drop');
+  d.addEventListener('dragover', e => { e.preventDefault(); d.classList.add('over'); });
+  d.addEventListener('dragleave', () => d.classList.remove('over'));
+  d.addEventListener('drop', e => { e.preventDefault(); d.classList.remove('over'); addFiles(e.dataTransfer.files); });
+})();
+// Any image the browser can decode is accepted (gallery photos may be HEIC, etc.);
+// every photo is re-encoded as JPEG before it is sent.
+async function addFiles(list){
+  for (const f of [...list]){
+    if (photos.length >= 4){ toast('Höchstens 4 Fotos pro Scan.'); break; }
+    if (f.type && !f.type.startsWith('image/')){ toast(`„${f.name}“ ist kein Bild.`); continue; }
+    try { const b = await bitmapOf(f); b.close?.(); }
+    catch { toast(`„${f.name}“ kann hier nicht geöffnet werden. Bitte als JPG speichern oder einen Screenshot davon nehmen.`, 4200); continue; }
+    photos.push({id: Math.random().toString(36).slice(2), file: f, url: URL.createObjectURL(f)});
+  }
+  renderThumbs();
+}
+function renderThumbs(busy=false){
+  $('#thumbs').innerHTML = photos.map(p => `<div class="thumb${busy?' scanning':''}"><img src="${p.url}" alt="Foto ${esc(p.file.name)}">${busy ? '' : `<button type="button" data-id="${p.id}" aria-label="Foto entfernen">✕</button>`}</div>`).join('');
+  $('#recognizeBtn').disabled = busy || !photos.length;
+}
+$('#thumbs').addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (!b) return; const p = photos.find(x => x.id === b.dataset.id); if (p) URL.revokeObjectURL(p.url); photos = photos.filter(x => x.id !== b.dataset.id); renderThumbs(); });
+function setStatus(kind, text){
+  const s = $('#scanStatus'); s.className = 'status' + (kind==='err' ? ' err' : kind==='ok' ? ' ok' : '');
+  s.innerHTML = kind === 'busy' ? `<span class="spin"></span><span>${esc(text)}</span>` : esc(text);
+}
+
+/* The platform shrinks each image to about 1.2 MP, which blurs dense ward rosters.
+   So each photo goes out as an overview plus overlapping zoomed tiles. */
+async function bitmapOf(file){
+  try { return await createImageBitmap(file, {imageOrientation:'from-image'}); }
+  catch { return await new Promise((res,rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); }); }
+}
+function crop(bmp, x, y, w, h, maxSide=1800){
+  const s = Math.min(1, maxSide / Math.max(w,h)), c = document.createElement('canvas');
+  c.width = Math.round(w*s); c.height = Math.round(h*s);
+  c.getContext('2d').drawImage(bmp, x, y, w, h, 0, 0, c.width, c.height);
+  return new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+}
+async function buildImages(){
+  const maxCount = imgLimits?.maxCount || 1, per = Math.max(1, Math.floor(maxCount / photos.length));
+  const blobs = [], legend = [];
+  for (let i=0; i<photos.length; i++){
+    const bmp = await bitmapOf(photos[i].file), W = bmp.width, H = bmp.height, o = 0.12, tag = photos.length > 1 ? `Foto ${i+1}` : 'Foto';
+    blobs.push(await crop(bmp, 0, 0, W, H)); legend.push(`${tag}: Gesamtansicht`);
+    if (per >= 5){
+      const w = W*(0.5+o), h = H*(0.5+o);
+      const parts = [['oben links',0,0],['oben rechts',W-w,0],['unten links',0,H-h],['unten rechts',W-w,H-h]];
+      for (const [name,x,y] of parts){ blobs.push(await crop(bmp, x, y, w, h)); legend.push(`${tag}: Ausschnitt ${name} (vergrößert, überlappend)`); }
+    } else if (per >= 3){
+      const wide = W >= H;
+      const a = wide ? [0,0,W*(0.5+o),H] : [0,0,W,H*(0.5+o)], b = wide ? [W*(0.5-o),0,W*(0.5+o),H] : [0,H*(0.5-o),W,H*(0.5+o)];
+      blobs.push(await crop(bmp, ...a)); legend.push(`${tag}: ${wide ? 'linke' : 'obere'} Hälfte (vergrößert)`);
+      blobs.push(await crop(bmp, ...b)); legend.push(`${tag}: ${wide ? 'rechte' : 'untere'} Hälfte (vergrößert)`);
+    }
+    bmp.close?.();
+  }
+  return {blobs, legend};
+}
+
+function buildPrompt({year, month, name, legend}){
+  const n = daysIn(year, month);
+  const known = state.codes.map(c => `${c.code} = ${c.label}${c.start ? ` (${c.start}–${c.end})` : ''}`).join('\n');
+  return `Du liest einen fotografierten Dienstplan einer Krankenhausstation oder Pflegeeinrichtung.
+
+BILDER (in dieser Reihenfolge):
+${legend.map((l,i) => `${i+1}. ${l}`).join('\n')}
+Die vergrößerten Ausschnitte zeigen Teile derselben Gesamtansicht in höherer Auflösung. Nutze sie zum Lesen der kleinen Schrift und die Gesamtansicht für die Zuordnung von Zeilen und Spalten.
+
+PERSON: ${name}
+MONAT: ${MONTHS[month]} ${year}. Der Monat hat ${n} Tage, der 1. ist ein ${DOW_LONG[dowIdx(year,month,1)]}.
+
+BEKANNTE KÜRZEL DIESER PERSON:
+${known}
+
+AUFGABE
+Finde die Zeile (oder Spalte) dieser Person und lies für jeden Tag 1 bis ${n} das eingetragene Dienstkürzel.
+- Bestimme zuerst den Aufbau: wo stehen Tagesnummern und Wochentage, wo die Namen. Prüfe die Zuordnung der Spalten an den Wochentagen gegen den Kalender oben.
+- Pflegepläne enthalten oft Zusatzzeilen (Soll/Ist-Stunden, Wunschfrei, Qualifikation, Bereitschaft). Nimm nur die Dienstzeile der Person.
+- Übernimm Kürzel genau wie geschrieben (z. B. F, S, N, F2, Z, U, K, FB, /, -). Handschriftliche Änderungen und Durchstreichungen haben Vorrang vor dem gedruckten Wert. Ein Tauschvermerk gehört in notes.
+- Leere Zelle: code "". Nichts erfinden. Bei schwer lesbaren Zellen deine beste Lesart nehmen und uncertain=true setzen.
+- Steht in einer Zelle eine Uhrzeit, trage sie in start/end ein (HH:MM), sonst "".
+- Erklärt eine Legende auf dem Plan Kürzel, die oben nicht stehen, liste sie in unknown_codes mit Bedeutung und Zeiten.
+- Passen mehrere Namen, nimm die beste Übereinstimmung und erwähne das in notes.
+
+ANTWORT
+Antworte nur mit diesem JSON-Objekt, mit genau einem Eintrag je Tag 1 bis ${n}:
+{"person_found": true, "matched_name": "Name wie auf dem Plan", "entries": [{"day": 1, "code": "F", "start": "", "end": "", "uncertain": false}], "unknown_codes": [{"code": "F2", "label": "Früh lang", "start": "06:00", "end": "16:00"}], "notes": "kurzer Hinweis auf Deutsch oder leer"}`;
+}
+
+/* Android app: call the Anthropic API directly with the user's key. */
+let sdkPromise = null;
+const RESULT_SCHEMA = {
+  type:'object', additionalProperties:false, required:['person_found','matched_name','entries','unknown_codes','notes'],
+  properties:{
+    person_found:{type:'boolean'}, matched_name:{type:'string'}, notes:{type:'string'},
+    entries:{type:'array', items:{type:'object', additionalProperties:false, required:['day','code','start','end','uncertain'],
+      properties:{day:{type:'integer'}, code:{type:'string'}, start:{type:'string'}, end:{type:'string'}, uncertain:{type:'boolean'}}}},
+    unknown_codes:{type:'array', items:{type:'object', additionalProperties:false, required:['code','label','start','end'],
+      properties:{code:{type:'string'}, label:{type:'string'}, start:{type:'string'}, end:{type:'string'}}}},
+  },
+};
+const blobToB64 = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(b); });
+async function recognizeViaApi(prompt, blobs, signal){
+  const fail = code => Object.assign(new Error(code), {code});
+  const Anthropic = await (sdkPromise ??= import(SDK_URL).then(m => m.default || m.Anthropic)).catch(() => { sdkPromise = null; throw fail('offline'); });
+  const client = new Anthropic({apiKey: getKey(), dangerouslyAllowBrowser: true});
+  const images = await Promise.all(blobs.map(async b => ({type:'image', source:{type:'base64', media_type:'image/jpeg', data: await blobToB64(b)}})));
+  let res;
+  try {
+    res = await client.beta.messages.create({
+      model:'claude-opus-5-5', max_tokens:16000,
+      betas:['server-side-fallback-2026-07-01'], fallbacks:'default',
+      output_config:{effort:'high', format:{type:'json_schema', schema: RESULT_SCHEMA}},
+      messages:[{role:'user', content:[...images, {type:'text', text: prompt}]}],
+    }, {signal});
+  } catch (err){
+    if (signal.aborted || err instanceof Anthropic.APIUserAbortError) throw fail('cancelled');
+    if (err instanceof Anthropic.AuthenticationError) throw fail('bad_key');
+    if (err instanceof Anthropic.PermissionDeniedError) throw fail('bad_key');
+    if (err instanceof Anthropic.RateLimitError) throw fail('rate_limited');
+    if (err instanceof Anthropic.APIConnectionError) throw fail('offline');
+    throw fail('upstream_error');
+  }
+  if (res.stop_reason === 'refusal') throw fail('refused');
+  if (res.stop_reason === 'max_tokens') throw fail('invalid_json');
+  try { return JSON.parse(res.content.filter(b => b.type === 'text').map(b => b.text).join('')); }
+  catch { throw fail('invalid_json'); }
+}
+
+const SAMPLE_ERRORS = {
+  bad_key: 'Der API-Schlüssel wurde abgelehnt. Bitte unter „Mehr“ prüfen.',
+  offline: 'Keine Internetverbindung. Bitte später erneut versuchen.',
+  not_granted: 'Du hast der App nicht erlaubt, Claude zu nutzen. Lade die Seite neu, um erneut gefragt zu werden.',
+  sampling_disabled: 'Claude ist für dein Konto hier nicht verfügbar.',
+  images_unavailable: 'Bilder senden geht in dieser Ansicht nicht.',
+  image_rejected: 'Ein Foto konnte nicht verarbeitet werden. Bitte ein anderes Foto (JPG oder PNG) nehmen.',
+  rate_limited: 'Gerade zu viele Anfragen oder dein Nutzungslimit ist erreicht. Bitte später erneut versuchen.',
+  session_expired: 'Du bist abgemeldet. Bitte in Claude neu anmelden.',
+  refused: 'Claude hat das Foto nicht ausgewertet. Bitte ein anderes Foto versuchen.',
+  invalid_json: 'Die Antwort war unvollständig. Bitte erneut auf „Erkennen“ tippen.',
+  empty_completion: 'Es kam keine Antwort. Bitte mit weniger Fotos erneut versuchen.',
+  prompt_too_large: 'Zu viele Fotos auf einmal. Bitte weniger Fotos wählen.',
+};
+$('#stopBtn').addEventListener('click', () => ctl?.abort());
+$('#recognizeBtn').addEventListener('click', async () => {
+  const month = +$('#scanMonth').value, year = +$('#scanYear').value, name = $('#scanName').value.trim();
+  if (!name){ toast('Bitte deinen Namen so eintragen, wie er auf dem Plan steht.'); $('#scanName').focus(); return; }
+  if (!(year >= 2000 && year <= 2100)){ toast('Bitte ein gültiges Jahr eintragen.'); return; }
+  if (APP && !getKey()){ setStatus('err', 'Bitte zuerst unter „Mehr“ deinen API-Schlüssel eintragen.'); return; }
+  if (!APP && !(sample && imgLimits)){ setStatus('err', sample === undefined ? 'Verbindung zu Claude wird noch aufgebaut. Bitte gleich nochmal tippen.' : 'Die Erkennung ist in dieser Ansicht nicht verfügbar. Öffne den Link angemeldet in Chrome und versuche es dort.'); return; }
+  if (name !== state.name){ state.name = name; store.saveSettings(); }
+  renderThumbs(true); $('#stopBtn').hidden = false;
+  setStatus('busy', 'Fotos werden vorbereitet');
+  ctl = new AbortController();
+  try {
+    const {blobs, legend} = await buildImages();
+    setStatus('busy', 'Claude liest den Plan, das dauert etwa eine Minute');
+    const prompt = buildPrompt({year, month, name, legend});
+    const data = APP ? await recognizeViaApi(prompt, blobs, ctl.signal) : await sample.json(prompt, {images: blobs, modelTier:'complex', signal: ctl.signal, cache:false});
+    const n = daysIn(year, month), entries = {};
+    for (const e of Array.isArray(data?.entries) ? data.entries : []){
+      const d = Number(e?.day); if (!(d>=1 && d<=n)) continue;
+      entries[d] = {code: String(e.code||'').trim(), start: isTime(e.start)?e.start:'', end: isTime(e.end)?e.end:'', uncertain: !!e.uncertain};
+    }
+    let learned = 0;
+    for (const u of Array.isArray(data?.unknown_codes) ? data.unknown_codes : []){
+      const code = String(u?.code||'').trim(); if (!code || codeDef(code)) continue;
+      const t = isTime(u.start) && isTime(u.end);
+      state.codes.push({code, label: String(u.label||code).trim(), start: t?u.start:'', end: t?u.end:'', pause: t?30:0, color:'#7fd1ff', kind: t?'work':'free'}); learned++;
+    }
+    if (learned) store.saveSettings();
+    const notes = [data?.person_found === false ? 'Dein Name wurde nicht sicher gefunden.' : '', data?.matched_name ? `Gelesene Zeile: „${data.matched_name}“.` : '', learned ? `${learned} neue Kürzel aus der Legende übernommen, bitte unter „Dienste“ prüfen.` : '', data?.notes || ''].filter(Boolean).join(' ');
+    scan = {year, month, entries, notes};
+    renderReview();
+    const found = Object.values(entries).filter(e => e.code).length;
+    setStatus(found ? 'ok' : 'err', found ? `${found} Tage erkannt` : 'Keine Dienste gefunden. Name und Foto prüfen oder Tage unten selbst setzen.');
+  } catch (e){
+    if (e?.code === 'cancelled') setStatus('', 'Abgebrochen');
+    else { console.error(e); setStatus('err', SAMPLE_ERRORS[e?.code] || 'Die Erkennung hat nicht geklappt. Bitte erneut versuchen.'); }
+  } finally { $('#stopBtn').hidden = true; renderThumbs(false); }
+});
+
+function renderReview(){
+  const {year, month, entries, notes} = scan, n = daysIn(year, month);
+  $('#reviewPanel').hidden = false;
+  $('#reviewTitle').textContent = `${MONTHS[month]} ${year}`;
+  $('#reviewCount').textContent = `${Object.values(entries).filter(e => e.code).length} / ${n} Tage`;
+  $('#reviewNotes').hidden = !notes; $('#reviewNotes').textContent = notes;
+  const opts = cur => {
+    const list = state.codes.map(c => c.code);
+    if (cur && !codeDef(cur)) list.push(cur);
+    return '<option value="">–</option>' + list.map(c => `<option value="${esc(c)}"${c.toLowerCase()===(cur||'').toLowerCase()?' selected':''}>${esc(c)} · ${esc(codeDef(c)?.label || 'neu')}</option>`).join('');
+  };
+  let html = '';
+  for (let d=1; d<=n; d++){
+    const e = entries[d] || {code:'',start:'',end:'',uncertain:false}, wi = dowIdx(year,month,d), def = codeDef(e.code);
+    html += `<div class="rv${e.uncertain && e.code ? ' unsure' : ''}${wi>4?' we':''}" data-d="${d}">
+      <span class="dd">${pad(d)}.${pad(month+1)}.<small>${DOW[wi].toUpperCase()}</small></span>
+      <select id="rv-c-${d}" aria-label="Dienst am ${d}.">${opts(e.code)}</select>
+      <input type="time" class="s" id="rv-s-${d}" value="${e.start || def?.start || ''}" aria-label="Beginn am ${d}.">
+      <input type="time" class="e" id="rv-e-${d}" value="${e.end || def?.end || ''}" aria-label="Ende am ${d}.">
+    </div>`;
+  }
+  $('#review').innerHTML = html;
+  $('#reviewPanel').scrollIntoView({behavior:'smooth', block:'start'});
+}
+$('#review').addEventListener('change', e => {
+  if (e.target.tagName !== 'SELECT') return;
+  const row = e.target.closest('.rv'), def = codeDef(e.target.value);
+  row.querySelector('.s').value = def?.start || ''; row.querySelector('.e').value = def?.end || ''; row.classList.remove('unsure');
+});
+$('#discardBtn').addEventListener('click', () => { scan = null; $('#reviewPanel').hidden = true; setStatus('', ''); });
+$('#applyBtn').addEventListener('click', () => {
+  if (!scan) return;
+  const {year, month} = scan, keep = $('#keepManual').checked;
+  let applied = 0, kept = 0, newCodes = false;
+  document.querySelectorAll('#review .rv').forEach(row => {
+    const d = +row.dataset.d, code = row.querySelector('select').value, k = keyOf(year,month,d), cur = entryAt(k);
+    if (!code) return;
+    if (keep && cur?.src === 'manual'){ kept++; return; }
+    if (!codeDef(code)){ state.codes.push({code, label: code, start:'', end:'', pause:0, color:'#7fd1ff', kind:'work'}); newCodes = true; }
+    const e = {shifts: [compactShift(code, row.querySelector('.s').value, row.querySelector('.e').value)], src:'scan'};
+    if (cur?.note) e.note = cur.note;
+    setEntry(k, e); applied++;
+  });
+  if (newCodes) store.saveSettings();
+  store.saveMonth(ymOf(year, month));
+  scan = null; photos.forEach(p => URL.revokeObjectURL(p.url)); photos = [];
+  $('#reviewPanel').hidden = true; setStatus('', ''); renderThumbs();
+  vy = year; vm = month; show('plan'); renderPlan();
+  toast(`${applied} Tage übernommen${kept ? `, ${kept} eigene Änderungen behalten` : ''}`, 3400);
+});
+
+/* ---------- boot ---------- */
+renderPlan();
+renderScanForm();
+store.init();
+})();
+</script>
